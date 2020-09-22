@@ -1,0 +1,22 @@
+{
+  "name": "polymer-to-lit",
+  "version": "1.0.0",
+  "description": "A migration tool for Polymer to Lit for selected cases",
+  "main": "index.js",
+  "directories": {
+    "example": "examples"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Artur Signell",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "acorn": "^7.1.0",
+    "prettier": "^2.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^13.7.4",
+    "node-html-parser": "^1.2.7"
+  }
+}
