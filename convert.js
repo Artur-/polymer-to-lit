@@ -2,13 +2,14 @@ const fs = require("fs");
 const process = require("process");
 const acorn = require("acorn");
 const htmlParse = require("node-html-parser").parse;
+const prettier = require("prettier");
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const ex = fs.readFileSync(process.argv[2]);
 const polymerJs = acorn.parse(ex, { sourceType: "module" });
 const body = polymerJs.body;
-const parseClass = node => {
+const parseClass = (node) => {
   const className = node.id.name;
   const parentClass = node.superClass.name;
   let tag = "";
@@ -59,7 +60,7 @@ const parseClass = node => {
   return { className, parentClass, template, tag };
 };
 
-const replaceProperties = element => {
+const replaceProperties = (element) => {
   // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
   if (element.attributes) {
     for (const key of Object.keys(element.attributes)) {
@@ -87,7 +88,7 @@ const replaceProperties = element => {
     replaceProperties(child);
   }
 };
-const modifyTemplate = inputHtml => {
+const modifyTemplate = (inputHtml) => {
   //  if (inputHtml.includes("}}")) {
   //   throw "Template contains two way bindings which are not supported";
   // }
@@ -96,20 +97,21 @@ const modifyTemplate = inputHtml => {
     script: true,
     style: true,
     pre: true,
-    comment: true
+    comment: true,
   });
   //console.log(root.innerHTML);
   const htmls = [];
   const styles = [];
   const styleIncludes = [];
   for (const child of root.childNodes) {
+    // console.log(child);
     if (child.tagName == "custom-style" || child.tagName == "style") {
       let style;
       if (child.tagName == "custom-style") {
         style = child.childNodes[1];
       } else {
         style = child;
-      } 
+      }
       const includes = style.getAttribute("include");
       if (includes) {
         styleIncludes.push(...includes.split(" "));
@@ -137,7 +139,7 @@ const modifyTemplate = inputHtml => {
 };
 const writeLit = (info, template) => {
   let cssModules = template.styleIncludes
-    .map(include => `CSSModule('${include}')`)
+    .map((include) => `CSSModule('${include}')`)
     .join(",");
   cssModules += ",";
 
@@ -165,13 +167,13 @@ const writeLit = (info, template) => {
         
 
     `;
-  console.log(output);
+  console.log(prettier.format(output, { parser: "typescript" }));
 };
 for (const node of body) {
   if (node.type == "ClassDeclaration") {
     const info = parseClass(node);
     const modifiedTemplate = modifyTemplate(info.template);
-    //    console.log(info);
+    console.log(modifiedTemplate);
 
     writeLit(info, modifiedTemplate);
   }

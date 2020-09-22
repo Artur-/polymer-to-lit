@@ -2,7 +2,7 @@
   "name": "polymer-to-lit",
   "version": "1.0.0",
   "description": "A migration tool for Polymer to Lit for selected cases",
-  "main": "index.js",
+  "main": "convert.js",
   "directories": {
     "example": "examples"
   },
