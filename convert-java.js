@@ -5,7 +5,7 @@ const javaInput = process.argv[2];
 let contents = fs.readFileSync(javaInput, { encoding: "UTF-8" });
 
 const tagMatch = contents.match(/@Tag\("(.*)"\)/);
-if (!tagMatch || tagMatch.length != 2) {
+if (!tagMatch) {
   return;
 }
 const tag = tagMatch[1];
@@ -20,8 +20,14 @@ contents = contents.replace(
 );
 
 contents = contents.replace(
-  "extends PolymerTemplate<TemplateModel>",
+  /extends PolymerTemplate<.*>/,
   "extends LitTemplate"
+);
+
+// If the model is empty, delete it
+contents = contents.replace(
+  /public static interface .* extends TemplateModel {.*}/,
+  ""
 );
 
 var replace = '@JsModule\\("(.*)' + tag + '.js"\\)';
