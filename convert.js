@@ -6,8 +6,10 @@ const prettier = require("prettier");
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
-const ex = fs.readFileSync(process.argv[2]);
-const polymerJs = acorn.parse(ex, { sourceType: "module" });
+const jsInput = process.argv[2];
+const tsOutput = jsInput.replace(".js", ".ts");
+const inputFile = fs.readFileSync(jsInput, { encoding: "UTF-8" });
+const polymerJs = acorn.parse(inputFile, { sourceType: "module" });
 const body = polymerJs.body;
 const parseClass = (node) => {
   const className = node.id.name;
@@ -137,19 +139,28 @@ const modifyTemplate = (inputHtml) => {
   //console.log(ret);
   return ret;
 };
-const writeLit = (info, template) => {
-  let cssModules = template.styleIncludes
-    .map((include) => `CSSModule('${include}')`)
-    .join(",");
-  cssModules += ",";
+const getLit = (info, template, imports) => {
+  let cssModules = "";
+  let cssModuleImport = "";
 
-  let css = template.styles.join("\n");
-  let html = template.htmls.join("\n");
+  if (template.styleIncludes.length > 0) {
+    cssModules = template.styleIncludes
+      .map((include) => `CSSModule('${include}')`)
+      .join(",");
+    cssModules += ",";
 
+    cssModuleImport =
+      'import { CSSModule } from "@vaadin/flow-frontend/css-utils";';
+  }
+
+  const css = template.styles.join("\n");
+  const html = template.htmls.join("\n");
+  const importStatements = imports.join("\n");
   const output = `
+  ${importStatements}
   import {customElement, html, LitElement, css} from 'lit-element';
 
-  import { CSSModule } from '../../css-utils';
+  ${cssModuleImport}
 
   @customElement('${info.tag}')
   export class ${info.className} extends LitElement {
@@ -167,14 +178,37 @@ const writeLit = (info, template) => {
         
 
     `;
-  console.log(prettier.format(output, { parser: "typescript" }));
+  return prettier.format(output, { parser: "typescript" });
 };
+const imports = [];
+const getSource = (node) => {
+  return inputFile.substring(node.start, node.end);
+};
+const skipImports = [
+  "@polymer/polymer/polymer-element.js",
+  "@polymer/polymer/lib/utils/html-tag.js",
+];
+for (const node of body) {
+  if (node.type == "ImportDeclaration") {
+    /*    if (node.specifiers) {
+      node.specifiers.forEach((specifier) => console.log(specifier));
+    }
+    console.log(Object.keys(node));
+    */
+
+    if (!skipImports.includes(node.source.value)) {
+      // console.log(node.source);
+      imports.push(getSource(node));
+    }
+  }
+}
 for (const node of body) {
   if (node.type == "ClassDeclaration") {
     const info = parseClass(node);
     const modifiedTemplate = modifyTemplate(info.template);
-    console.log(modifiedTemplate);
+    // console.log(modifiedTemplate);
 
-    writeLit(info, modifiedTemplate);
+    const contents = getLit(info, modifiedTemplate, imports);
+    fs.writeFileSync(tsOutput, contents);
   }
 }
