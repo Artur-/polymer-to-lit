@@ -11,6 +11,10 @@ if (!tagMatch) {
 const tag = tagMatch[1];
 
 contents = contents.replace(
+  "import com.vaadin.flow.component.polymertemplate.Id;",
+  "import com.vaadin.flow.component.template.Id;"
+);
+contents = contents.replace(
   "import com.vaadin.flow.component.polymertemplate.PolymerTemplate;",
   "import com.vaadin.flow.component.littemplate.LitTemplate;"
 );
