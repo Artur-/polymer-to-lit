@@ -1,8 +1,8 @@
-const fs = require("fs");
-const process = require("process");
-const acorn = require("acorn");
+import fs from "fs";
+// const process = require("process");
+import acorn from "acorn";
 const htmlParse = require("node-html-parser").parse;
-const prettier = require("prettier");
+import prettier from "prettier";
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
@@ -10,8 +10,8 @@ const jsInput = process.argv[2];
 const tsOutput = jsInput.replace(".js", ".ts");
 const inputFile = fs.readFileSync(jsInput, { encoding: "UTF-8" });
 const polymerJs = acorn.parse(inputFile, { sourceType: "module" });
-const body = polymerJs.body;
-const parseClass = (node) => {
+const body = (polymerJs as any).body;
+const parseClass = (node: any) => {
   const className = node.id.name;
   const parentClass = node.superClass.name;
   let tag = "";
@@ -67,26 +67,26 @@ const replaceProperties = (element) => {
   if (element.attributes) {
     for (const key of Object.keys(element.attributes)) {
       const value = element.attributes[key];
-      if (key.endsWith("$") && value.startsWith("[[") && value.endsWith("]]")) {
-        // rewrite prop$="[[foo]]" => prop=${this.foo}
-        console.log("Rewrite attr: ", key, value);
-        const propertyName = value.replace("[[", "").replace("]]", "");
-        element.setAttribute(
-          key.replace("$", ""),
-          "${this." + propertyName + "}"
-        );
-        element.removeAttribute(key);
-      } else if (value.startsWith("[[") && value.endsWith("]]")) {
-        // rewrite prop="[[foo]]" => .prop=${this.foo}
-        console.log("Rewrite prop: ", key, value);
-        const propertyName = value.replace("[[", "").replace("]]", "");
-        element.setAttribute("." + key, "${this." + propertyName + "}");
-        element.removeAttribute(key);
+
+      if (value.startsWith("[[") && value.endsWith("]]")) {
+        const name = value.substring(2, value.length - 2);
+        if (key.endsWith("$")) {
+          // attribute binding prop$="[[foo]]" => prop=${this.foo}
+          // console.log("Rewrite attr: ", key, value);
+          element.setAttribute(key.replace("$", ""), "${this." + name + "}");
+          element.removeAttribute(key);
+        } else {
+          // property binding prop="[[foo]]" => .prop=${this.foo}
+          // console.log("Rewrite prop: ", key, value);
+          element.setAttribute("." + key, "${this." + name + "}");
+          element.removeAttribute(key);
+        }
       }
     }
   }
+
   //
-  for (child of element.childNodes) {
+  for (const child of element.childNodes) {
     replaceProperties(child);
   }
 };
@@ -102,9 +102,9 @@ const modifyTemplate = (inputHtml) => {
     comment: true,
   });
   //console.log(root.innerHTML);
-  const htmls = [];
-  const styles = [];
-  const styleIncludes = [];
+  const htmls: string[] = [];
+  const styles: string[] = [];
+  const styleIncludes: string[] = [];
   for (const child of root.childNodes) {
     // console.log(child);
     if (child.tagName == "custom-style" || child.tagName == "style") {
@@ -114,7 +114,7 @@ const modifyTemplate = (inputHtml) => {
       } else {
         style = child;
       }
-      const includes = style.getAttribute("include");
+      const includes: string = style.getAttribute("include");
       if (includes) {
         styleIncludes.push(...includes.split(" "));
       }
@@ -180,8 +180,8 @@ const getLit = (info, template, imports) => {
     `;
   return prettier.format(output, { parser: "typescript" });
 };
-const imports = [];
-const getSource = (node) => {
+const imports: string[] = [];
+const getSource = (node: any) => {
   return inputFile.substring(node.start, node.end);
 };
 const skipImports = [
