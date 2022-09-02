@@ -3,27 +3,25 @@ import { html, PolymerElement } from "@polymer/polymer/polymer-element.js";
 class DisabledUsingMethod extends PolymerElement {
   static get template() {
     return html`
-        <vaadin-vertical-layout id="buttons">
-          <vaadin-button
-            id="signUp"
-            theme="primary"
-            disabled="[[!and(property1, property2)]]"
-             on-click="submit"
-            >Sign Up</vaadin-button
-          >
-          <vaadin-button id="cancelSignUpBtn" theme="tertiary" on-click="cancelButtonClicked"
-            >Cancel</vaadin-button
-          >
-          
-        </vaadin-vertical-layout>
-
-        <span class="payment-notes">Month-to-month @ $500 / month</span>
+      <vaadin-vertical-layout id="buttons">
+        <vaadin-button
+          id="signUp"
+          theme="primary"
+          disabled="[[!and(property1, property2)]]"
+          on-click="submit"
+          >Sign Up</vaadin-button
+        >
+        <vaadin-button
+          id="cancelSignUpBtn"
+          theme="tertiary"
+          on-click="cancelButtonClicked"
+          >Cancel</vaadin-button
+        >
       </vaadin-vertical-layout>
 
-      </vaadin-vertical-layout>
+      <span class="payment-notes">Month-to-month @ $500 / month</span>
       <a class="support" href="{{contactLink}}">Contact Support</a>
-    </div>
-`;
+    `;
   }
 
   and(a, b) {

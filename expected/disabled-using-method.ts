@@ -1,31 +1,25 @@
-import { html, PolymerElement } from "@polymer/polymer/polymer-element.js";
+import { html, LitElement, css } from "lit";
 
-class DisabledUsingMethod extends PolymerElement {
+class DisabledUsingMethod extends LitElement {
   render() {
-    return html`
-        <vaadin-vertical-layout id="buttons">
-          <vaadin-button
-            id="signUp"
-            theme="primary"
-            disabled="${!this.and(this.property1, this.property2)}"
-             on-click="submit"
-            >Sign Up</vaadin-button
-          >
-          <vaadin-button id="cancelSignUpBtn" theme="tertiary" @click="${(
-            e: any
-          ) => this.cancelButtonClicked(e)}"
-            >Cancel</vaadin-button
-          >
-          
-        </vaadin-vertical-layout>
-
-        <span class="payment-notes">Month-to-month @ $500 / month</span>
+    return html`      <vaadin-vertical-layout id="buttons">
+        <vaadin-button
+          id="signUp"
+          theme="primary"
+          .disabled="${!this.and(this.property1, this.property2)}"
+          @click="${this.submit}"
+          >Sign Up</vaadin-button
+        >
+        <vaadin-button
+          id="cancelSignUpBtn"
+          theme="tertiary"
+          @click="${this.cancelButtonClicked}"
+          >Cancel</vaadin-button
+        >
       </vaadin-vertical-layout>
 
-      </vaadin-vertical-layout>
-      <a class="support" .href="${this.contactLink}">Contact Support</a>
-    </div>
-`;
+      <span class="payment-notes">Month-to-month @ $500 / month</span>
+      <a class="support" .href="${this.contactLink}">Contact Support</a>    `;
   }
 
   and(a, b) {

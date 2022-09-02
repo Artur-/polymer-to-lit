@@ -288,8 +288,6 @@ function prependWithThis(expression: string) {
 
 console.log();
 console.log("------------");
-console.log();
-console.log(tsOutput.toString());
 fs.writeFileSync(tsOutputFile, tsOutput.toString());
 function removeImport(node: any, ...identifiers: string[]) {
   const remove: any[] = [];
