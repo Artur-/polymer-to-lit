@@ -1,15 +1,17 @@
-import fs from "fs";
+import * as fs from "fs";
 // const process = require("process");
-import acorn from "acorn";
+import * as acorn from "acorn";
+import * as walk from "acorn-walk";
 const htmlParse = require("node-html-parser").parse;
-import prettier from "prettier";
+import * as prettier from "prettier";
+import MagicString from "magic-string";
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const jsInput = process.argv[2];
 const tsOutput = jsInput.replace(".js", ".ts");
-const inputFile = fs.readFileSync(jsInput, { encoding: "UTF-8" });
-const polymerJs = acorn.parse(inputFile, { sourceType: "module" });
+const jsContents = fs.readFileSync(jsInput, { encoding: "UTF-8" });
+const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
 const body = (polymerJs as any).body;
 const parseClass = (node: any) => {
   const className = node.id.name;
@@ -68,18 +70,33 @@ const replaceProperties = (element) => {
     for (const key of Object.keys(element.attributes)) {
       const value = element.attributes[key];
 
-      if (value.startsWith("[[") && value.endsWith("]]")) {
-        const name = value.substring(2, value.length - 2);
+      if (
+        (value.startsWith("[[") && value.endsWith("]]")) ||
+        (value.startsWith("{{") && value.endsWith("}}"))
+      ) {
+        const twoWay = value.startsWith("{{");
+
+        const expression = value.substring(2, value.length - 2);
         if (key.endsWith("$")) {
           // attribute binding prop$="[[foo]]" => prop=${this.foo}
           // console.log("Rewrite attr: ", key, value);
-          element.setAttribute(key.replace("$", ""), "${this." + name + "}");
+          element.setAttribute(
+            key.replace("$", ""),
+            "${" + prependWithThis(expression) + "}"
+          );
           element.removeAttribute(key);
         } else {
           // property binding prop="[[foo]]" => .prop=${this.foo}
+          // prop="[[!and(property1, property2)]]" => .prop=${!this.and(this.property1, this.property2)}
           // console.log("Rewrite prop: ", key, value);
-          element.setAttribute("." + key, "${this." + name + "}");
+          element.setAttribute(
+            "." + key,
+            "${" + prependWithThis(expression) + "}"
+          );
           element.removeAttribute(key);
+        }
+
+        if (twoWay) {
         }
       }
     }
@@ -158,11 +175,10 @@ const getLit = (info, template, imports) => {
   const importStatements = imports.join("\n");
   const output = `
   ${importStatements}
-  import {customElement, html, LitElement, css} from 'lit-element';
+  import {html, LitElement, css} from 'lit';
 
   ${cssModuleImport}
 
-  @customElement('${info.tag}')
   export class ${info.className} extends LitElement {
     static get styles() {
       return [
@@ -182,7 +198,7 @@ const getLit = (info, template, imports) => {
 };
 const imports: string[] = [];
 const getSource = (node: any) => {
-  return inputFile.substring(node.start, node.end);
+  return jsContents.substring(node.start, node.end);
 };
 const skipImports = [
   "@polymer/polymer/polymer-element.js",
@@ -211,4 +227,16 @@ for (const node of body) {
     const contents = getLit(info, modifiedTemplate, imports);
     fs.writeFileSync(tsOutput, contents);
   }
+}
+function prependWithThis(expression: string) {
+  const s = new MagicString(expression);
+  const expr = acorn.parse(expression);
+  console.log((expr as any).body[0].expression.argument);
+  walk.simple(expr, {
+    Identifier(node: any) {
+      s.overwrite(node.start, node.end, "this." + node.name);
+      // console.log('Identifier',node);
+    },
+  });
+  return s.toString();
 }

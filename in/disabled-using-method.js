@@ -26,6 +26,10 @@ class DisabledUsingMethod extends PolymerElement {
 `;
   }
 
+  and(a, b) {
+    return a && b;
+  }
+
   static get is() {
     return "disabled-using-method";
   }
@@ -42,7 +46,6 @@ class DisabledUsingMethod extends PolymerElement {
       },
     };
   }
-
 }
 
 customElements.define(DisabledUsingMethod.is, DisabledUsingMethod);
