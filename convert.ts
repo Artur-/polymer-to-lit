@@ -89,7 +89,18 @@ return html\`${html}\`;
   return { className, parentClass, template, tag };
 };
 
-const replaceProperties = (element) => {
+const rewriteTextNode = (node) => {
+  const bindingRe = /\[\[(.+)\]\]/g;
+  const bindingRe2 = /\{\{(.+)\}\}/g;
+
+  var result = node.rawText;
+  result = result.replace(bindingRe, `\${this.$1}`);
+  result = result.replace(bindingRe2, `\${this.$1}`);
+
+  node.rawText = result;
+};
+
+const rewriteElement = (element) => {
   // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
   if (element.attributes) {
     for (const key of Object.keys(element.attributes)) {
@@ -129,7 +140,7 @@ const replaceProperties = (element) => {
 
   //
   for (const child of element.childNodes) {
-    replaceProperties(child);
+    rewriteHtmlNode(child);
   }
 };
 const modifyTemplate = (inputHtml) => {
@@ -172,8 +183,15 @@ const modifyTemplate = (inputHtml) => {
       // TODO [[]] as text
       // TODO  href="mailto:[[item.email]]"
       // TODO <template> tags
-      replaceProperties(child);
+      rewriteElement(child);
+      // console.log("Child", child);
       htmls.push(child.outerHTML);
+    } else {
+      console.log(
+        "WARNING: Unhandled html node of type ",
+        child.nodeType,
+        child
+      );
     }
   }
 
@@ -244,14 +262,13 @@ for (const node of body) {
     modifyClass(node);
   } else if (node.type === "ImportDeclaration") {
     removeImport(node, "html", "PolymerElement");
-    console.log(node);
   } else {
-    console.log(node.type);
+    console.log("WARNING: Unhandled root node", node.type, getSource(node));
   }
 }
 
 tsOutput.prepend(`import { html, LitElement, css } from "lit";
-`)
+`);
 
 // const contents = getLit(info, modifiedTemplate, imports);
 // fs.writeFileSync(tsOutputFile, contents);
@@ -276,7 +293,6 @@ console.log(tsOutput.toString());
 fs.writeFileSync(tsOutputFile, tsOutput.toString());
 function removeImport(node: any, ...identifiers: string[]) {
   const remove: any[] = [];
-  console.log(node);
   node.specifiers.forEach((specifier) => {
     if (identifiers.includes(specifier?.imported?.name)) {
       remove.push(specifier);
@@ -284,12 +300,21 @@ function removeImport(node: any, ...identifiers: string[]) {
   });
   if (remove.length === node.specifiers.length) {
     // Remove all
-    console.log("Remove all");
     tsOutput.remove(node.start, node.end);
   } else {
+    console.log("ERROR: Unable to remove only part of an import");
     //FIXME Broken
     remove.forEach((specifier) =>
       tsOutput.remove(specifier.start, specifier.end)
     );
+  }
+}
+function rewriteHtmlNode(child: any) {
+  if (child.nodeType === 1) {
+    rewriteElement(child);
+  } else if (child.nodeType === 3) {
+    rewriteTextNode(child);
+  } else {
+    console.log("unhandled child", child);
   }
 }
