@@ -11,7 +11,9 @@ class DisabledUsingMethod extends PolymerElement {
              on-click="submit"
             >Sign Up</vaadin-button
           >
-          <vaadin-button id="cancelSignUpBtn" theme="tertiary" @click="${(e:any) => this.cancelButtonClicked(e)}"
+          <vaadin-button id="cancelSignUpBtn" theme="tertiary" @click="${(
+            e: any
+          ) => this.cancelButtonClicked(e)}"
             >Cancel</vaadin-button
           >
           

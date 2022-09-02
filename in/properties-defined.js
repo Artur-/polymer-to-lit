@@ -3,9 +3,7 @@ import { html, PolymerElement } from "@polymer/polymer/polymer-element.js";
 class PropertiesDefined extends PolymerElement {
   static get template() {
     return html`
-
       <div>
-
         <span>somethingWithValue.value: [[somethingWithValue.value]]</span>
 
         <span>errorMessage: [[errorMessage]]</span>
@@ -17,9 +15,7 @@ class PropertiesDefined extends PolymerElement {
         <span>stringWithoutDefault: [[stringWithoutDefault]]</span>
 
         <span>stringFoo: [[stringFoo]]</span>
-
       </div>
-
     `;
   }
 

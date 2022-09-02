@@ -2,10 +2,12 @@ import { html, LitElement, css } from "lit";
 
 class BasicBindings extends LitElement {
   render() {
-    return html`     <vaadin-vertical-layout id="buttons">
+    return html`
+      <vaadin-vertical-layout id="buttons">
         <vaadin-button .id="${this.buttonId}">${this.buttonText}</vaadin-button>
         <vaadin-text-field .value="${this.textfieldValue}"></vaadin-text-field>
-      </vaadin-vertical-layout>    `;
+      </vaadin-vertical-layout>
+    `;
   }
 
   static get is() {

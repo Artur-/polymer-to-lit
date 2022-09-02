@@ -19,9 +19,7 @@ class TwoWayBindingAccidental extends PolymerElement {
               <div class="title">Last Name</div>
               <div class="data">{{lastName}}</div>
             </vaadin-vertical-layout>
-            <vaadin-button id="editInfoBtn">
-              Edit
-            </vaadin-button>
+            <vaadin-button id="editInfoBtn"> Edit </vaadin-button>
           </vaadin-horizontal-layout>
         </vaadin-vertical-layout>
       </div>

@@ -9,19 +9,19 @@ import { html, PolymerElement } from "@polymer/polymer/polymer-element.js";
 class LightDom extends PolymerElement {
   static get template() {
     return html`
-    <div class="content">
-      <vaadin-vertical-layout
-        style="width: 100%;"
-        class="inner-content"
-        id="emailPart"
-      >
-        <div class="title">Upgrade to Enterprise</div>
-        <div class="sub-title">
-          Please fill in the information below. All fields are required.
-        </div>
+      <div class="content">
+        <vaadin-vertical-layout
+          style="width: 100%;"
+          class="inner-content"
+          id="emailPart"
+        >
+          <div class="title">Upgrade to Enterprise</div>
+          <div class="sub-title">
+            Please fill in the information below. All fields are required.
+          </div>
         </vaadin-vertical-layout>
-    </div>
-`;
+      </div>
+    `;
   }
 
   static get is() {

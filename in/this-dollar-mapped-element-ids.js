@@ -9,7 +9,6 @@ import { html } from "@polymer/polymer/lib/utils/html-tag.js";
 class ThisDollarMappedElement extends PolymerElement {
   static get template() {
     return html`
-
       <search-bar id="search" show-checkbox=""></search-bar>
 
       <vaadin-grid id="grid" theme="orders no-row-borders"></vaadin-grid>
@@ -19,7 +18,6 @@ class ThisDollarMappedElement extends PolymerElement {
         theme="orders"
         on-opened-changed="_onDialogOpen"
       ></vaadin-dialog>
-
     `;
   }
 
