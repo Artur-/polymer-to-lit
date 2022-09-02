@@ -250,6 +250,9 @@ for (const node of body) {
   }
 }
 
+tsOutput.prepend(`import { html, LitElement, css } from "lit";
+`)
+
 // const contents = getLit(info, modifiedTemplate, imports);
 // fs.writeFileSync(tsOutputFile, contents);
 
@@ -270,6 +273,7 @@ console.log();
 console.log("------------");
 console.log();
 console.log(tsOutput.toString());
+fs.writeFileSync(tsOutputFile, tsOutput.toString());
 function removeImport(node: any, ...identifiers: string[]) {
   const remove: any[] = [];
   console.log(node);
@@ -280,7 +284,7 @@ function removeImport(node: any, ...identifiers: string[]) {
   });
   if (remove.length === node.specifiers.length) {
     // Remove all
-    console.log("Remove all")
+    console.log("Remove all");
     tsOutput.remove(node.start, node.end);
   } else {
     //FIXME Broken
@@ -288,5 +292,4 @@ function removeImport(node: any, ...identifiers: string[]) {
       tsOutput.remove(specifier.start, specifier.end)
     );
   }
-
 }
