@@ -106,7 +106,12 @@ const rewriteElement = (element) => {
     for (const key of Object.keys(element.attributes)) {
       const value = element.attributes[key];
 
-      if (
+      if (key.startsWith("on-")) {
+        const eventName = key.substring(3);
+        const eventHandler = value;
+        element.removeAttribute(key);
+        element.setAttribute("@" + eventName, `\${this.${eventHandler}}`);
+      } else if (
         (value.startsWith("[[") && value.endsWith("]]")) ||
         (value.startsWith("{{") && value.endsWith("}}"))
       ) {
