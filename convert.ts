@@ -134,7 +134,16 @@ return html\`${html}\`;
 };
 
 const removeIncludingTrailingComma = (node) => {
-  tsOutput.remove(node.start, node.end);
+  if (jsContents.substring(node.end, node.end + 1) === ",") {
+    tsOutput.remove(node.start, node.end + 1);
+  } else {
+    tsOutput.remove(node.start, node.end);
+  }
+  // console.log(
+  //   getSource(node),
+  //   "and then",
+  //   jsContents.substring(node.end, node.end + 1+5)
+  // );
   // if (jsContents.charAt(node.end+1)===',') {
   //   tsOutput.remove(node.end+1,node.end+1);
   // }
