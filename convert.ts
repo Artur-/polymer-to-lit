@@ -13,6 +13,9 @@ const tsOutputFile = jsInputFile.replace(".js", ".ts");
 const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
+const initValues: any[] = [];
+let valueInitPosition = -1;
+let constructorInjectPosition = -1;
 
 const body = (polymerJs as any).body;
 const modifyClass = (node: any) => {
@@ -24,10 +27,11 @@ const modifyClass = (node: any) => {
   if (parentClass.name !== "PolymerElement") {
     return;
   }
+  // console.log(getSource(node.body));
+  constructorInjectPosition = node.body.end - 1;
 
   // extends PolymerElement -> extends LitElement
   tsOutput.overwrite(node.superClass.start, node.superClass.end, "LitElement");
-
   for (const classContent of node.body.body) {
     if (
       classContent.type == "MethodDefinition" &&
@@ -57,38 +61,85 @@ return html\`${html}\`;
       tag = classContent.value.body.body[0].argument.value;
       // console.log(getSource(classContent));
     } else if (
-      classContent.type == "MethodDefinition" &&
-      classContent.key.name == "properties"
+      classContent.type === "MethodDefinition" &&
+      classContent.kind === "get" &&
+      classContent.key.name === "properties"
     ) {
-      // TODO handle properties
-      // static get properties() {
-      //   return {
-      //     myProperty: Boolean,
-      //     mySecondProperty: {
-      //       type: String,
-      //       reflectToAttribute: true
-      //     }
-      //   };
-      // }
-      // ->
-      // static get properties() {
-      //   return {
-      //     myProperty: { type: Boolean },
-      //     mySecondProperty: {
-      //       type: String,
-      //       reflect: true
-      //     }
-      //   };
-      // }
-      // or
-      // @property({ type: Boolean })
-      // myProperty = false;
+      if (
+        classContent.value.type === "FunctionExpression" &&
+        classContent.value.body.type == "BlockStatement"
+      ) {
+        const returnStatment = classContent.value.body.body;
+
+        returnStatment[0].argument.properties.forEach((prop) => {
+          // console.log(prop.value.properties);
+          const propName = prop.key.name;
+          prop.value.properties.forEach((typeValue) => {
+            const keyNode = typeValue.key;
+            const valueNode = typeValue.value;
+            if (keyNode.type === "Identifier" && keyNode.name === "value") {
+              // Value initialization that must go into the constructor
+              if (valueNode.type === "Literal") {
+                const value = valueNode.name;
+                const initValue = valueNode.raw;
+                initValues.push({
+                  name: propName,
+                  value: initValue,
+                });
+                // console.log(propName, "=", initValue);
+                // console.log(getSource(typeValue));
+                removeIncludingTrailingComma(typeValue);
+              }
+            }
+          });
+        });
+      }
+    } else if (
+      classContent.type === "MethodDefinition" &&
+      classContent.kind === "constructor"
+    ) {
+      const constructorNode = classContent;
+      // console.log(constructorNode.value.body);
+      valueInitPosition = constructorNode.value.body.end - 1;
+      // console.log(getSource(constructorNode.value.body));
+    } else {
+      // console.log("Unhandled class content", classContent);
     }
+    // TODO handle properties
+    // static get properties() {
+    //   return {
+    //     myProperty: Boolean,
+    //     mySecondProperty: {
+    //       type: String,
+    //       reflectToAttribute: true
+    //     }
+    //   };
+    // }
+    // ->
+    // static get properties() {
+    //   return {
+    //     myProperty: { type: Boolean },
+    //     mySecondProperty: {
+    //       type: String,
+    //       reflect: true
+    //     }
+    //   };
+    // }
+    // or
+    // @property({ type: Boolean })
+    // myProperty = false;
     // console.log(getSource(classContent));
   }
   return { className, parentClass, template, tag };
 };
 
+const removeIncludingTrailingComma = (node) => {
+  tsOutput.remove(node.start, node.end);
+  // if (jsContents.charAt(node.end+1)===',') {
+  //   tsOutput.remove(node.end+1,node.end+1);
+  // }
+  // Fixme trailing ,
+};
 const rewriteTextNode = (node) => {
   const bindingRe = /\[\[(.+)\]\]/g;
   const bindingRe2 = /\{\{(.+)\}\}/g;
@@ -179,7 +230,13 @@ const modifyTemplate = (inputHtml) => {
       // console.log(style.innerHTML);
       const css = style.innerHTML;
       styles.push(css);
-    } else if (child.nodeType == 1) {
+    } else {
+      rewriteHtmlNode(child);
+      if (child.nodeType === 1) {
+        htmls.push(child.outerHTML);
+      } else {
+        htmls.push(child.rawText);
+      }
       // TODO rewrite on-click="_onClick" => @click=${(e) => this._onClick(e)}
       // TODO warn about {{foo}} or generate event handlers for known types
       // TODO rewrite dom-repeat
@@ -188,15 +245,7 @@ const modifyTemplate = (inputHtml) => {
       // TODO [[]] as text
       // TODO  href="mailto:[[item.email]]"
       // TODO <template> tags
-      rewriteElement(child);
       // console.log("Child", child);
-      htmls.push(child.outerHTML);
-    } else {
-      console.log(
-        "WARNING: Unhandled html node of type ",
-        child.nodeType,
-        child
-      );
     }
   }
 
@@ -275,6 +324,23 @@ for (const node of body) {
 tsOutput.prepend(`import { html, LitElement, css } from "lit";
 `);
 
+const valueInitCode = initValues
+  .map((initValue) => {
+    return `this.${initValue.name} = ${initValue.value};`;
+  })
+  .join("\n");
+
+if (valueInitPosition !== -1) {
+  tsOutput.prependRight(valueInitPosition, valueInitCode);
+} else {
+  // No constructor
+  const constructorCode = `constructor() {
+    super();
+    ${valueInitCode}
+  }`;
+  tsOutput.prependRight(constructorInjectPosition, constructorCode);
+}
+
 // const contents = getLit(info, modifiedTemplate, imports);
 // fs.writeFileSync(tsOutputFile, contents);
 
@@ -307,9 +373,7 @@ function removeImport(node: any, ...identifiers: string[]) {
   } else {
     console.log("ERROR: Unable to remove only part of an import");
     //FIXME Broken
-    remove.forEach((specifier) =>
-      tsOutput.remove(specifier.start, specifier.end)
-    );
+    remove.forEach((specifier) => removeIncludingTrailingComma(specifier));
   }
 }
 function rewriteHtmlNode(child: any) {
