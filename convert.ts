@@ -198,6 +198,11 @@ const rewriteElement = (element) => {
         }
 
         if (twoWay) {
+          // @value-change=${(e) => (this.name = e.target.value)}
+          const eventName = key + "-changed";
+          const attributeKey = "@" + eventName;
+          const attributeValue = `\${(e) => (${prependWithThis(expression)} = e.target.value)}`;
+          element.setAttribute(attributeKey, attributeValue);
         }
       }
     }
