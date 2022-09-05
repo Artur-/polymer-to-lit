@@ -14,8 +14,9 @@ const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
 const initValues: any[] = [];
+const computedProperties: any[] = [];
 let valueInitPosition = -1;
-let constructorInjectPosition = -1;
+let newMethodInjectPosition = -1;
 
 const body = (polymerJs as any).body;
 const modifyClass = (node: any) => {
@@ -28,7 +29,7 @@ const modifyClass = (node: any) => {
     return;
   }
   // console.log(getSource(node.body));
-  constructorInjectPosition = node.body.end - 1;
+  newMethodInjectPosition = node.body.end - 1;
 
   // extends PolymerElement -> extends LitElement
   tsOutput.overwrite(node.superClass.start, node.superClass.end, "LitElement");
@@ -72,26 +73,42 @@ return html\`${html}\`;
         const returnStatment = classContent.value.body.body;
 
         returnStatment[0].argument.properties.forEach((prop) => {
-          // console.log(prop.value.properties);
+          // console.log(prop);
           const propName = prop.key.name;
-          prop.value.properties.forEach((typeValue) => {
-            const keyNode = typeValue.key;
-            const valueNode = typeValue.value;
-            if (keyNode.type === "Identifier" && keyNode.name === "value") {
-              // Value initialization that must go into the constructor
-              if (valueNode.type === "Literal") {
-                const value = valueNode.name;
-                const initValue = valueNode.raw;
-                initValues.push({
-                  name: propName,
-                  value: initValue,
-                });
-                // console.log(propName, "=", initValue);
-                // console.log(getSource(typeValue));
-                removeIncludingTrailingComma(typeValue);
+
+          if (prop.value.type === "Identifier") {
+            // first: String
+            // type of property
+          } else {
+            // console.log(prop.value.type);
+            prop.value.properties.forEach((typeValue) => {
+              const keyNode = typeValue.key;
+              const valueNode = typeValue.value;
+              if (keyNode.type === "Identifier") {
+                if (keyNode.name === "value") {
+                  // Value initialization that must go into the constructor
+                  if (valueNode.type === "Literal") {
+                    // const value = valueNode.name;
+                    const initValue = valueNode.raw;
+                    initValues.push({
+                      name: propName,
+                      value: initValue,
+                    });
+                    // console.log(propName, "=", initValue);
+                    // console.log(getSource(typeValue));
+                    removeIncludingTrailingComma(typeValue);
+                  }
+                } else if (keyNode.name === "computed") {
+
+                  computedProperties.push({
+                    name: propName,
+                    value: prependWithThis(valueNode.value),
+                  });
+                  removeIncludingTrailingComma(typeValue);
+                }
               }
-            }
-          });
+            });
+          }
         });
       }
     } else if (
@@ -201,7 +218,9 @@ const rewriteElement = (element) => {
           // @value-change=${(e) => (this.name = e.target.value)}
           const eventName = key + "-changed";
           const attributeKey = "@" + eventName;
-          const attributeValue = `\${(e) => (${prependWithThis(expression)} = e.target.value)}`;
+          const attributeValue = `\${(e) => (${prependWithThis(
+            expression
+          )} = e.target.value)}`;
           element.setAttribute(attributeKey, attributeValue);
         }
       }
@@ -251,15 +270,11 @@ const modifyTemplate = (inputHtml) => {
       } else {
         htmls.push(child.rawText);
       }
-      // TODO rewrite on-click="_onClick" => @click=${(e) => this._onClick(e)}
-      // TODO warn about {{foo}} or generate event handlers for known types
       // TODO rewrite dom-repeat
       // TODO rewrite dom-if
       // TODO rewrite dom-repeat
-      // TODO [[]] as text
       // TODO  href="mailto:[[item.email]]"
       // TODO <template> tags
-      // console.log("Child", child);
     }
   }
 
@@ -267,42 +282,7 @@ const modifyTemplate = (inputHtml) => {
   //console.log(ret);
   return ret;
 };
-// const getLit = (info, template, imports) => {
-//   let cssModules = "";
-//   let cssModuleImport = "";
 
-//   if (template.styleIncludes.length > 0) {
-//     cssModules = template.styleIncludes
-//       .map((include) => `CSSModule('${include}')`)
-//       .join(",");
-//     cssModules += ",";
-
-//     cssModuleImport =
-//       'import { CSSModule } from "@vaadin/flow-frontend/css-utils";';
-//   }
-
-//   const output = `
-//   ${importStatements}
-//   import {html, LitElement, css} from 'lit';
-
-//   ${cssModuleImport}
-
-//   export class ${info.className} extends LitElement {
-//     static get styles() {
-//       return [
-//       ${cssModules}
-//       css\`${css}\`
-//       ];
-//     }
-
-//     render() {
-//       return html\`${html}\`;
-//     }
-//   }
-
-//     `;
-//   return prettier.format(output, { parser: "typescript" });
-// };
 const imports: string[] = [];
 const getSource = (node: any) => {
   return jsContents.substring(node.start, node.end);
@@ -330,7 +310,7 @@ for (const node of body) {
     modifyClass(node);
   } else if (node.type === "ImportDeclaration") {
     removeImport(node, "html", "PolymerElement");
-  } else {
+  } else if (!getSource(node).includes("customElements.define")) {
     console.log("WARNING: Unhandled root node", node.type, getSource(node));
   }
 }
@@ -344,6 +324,14 @@ const valueInitCode = initValues
   })
   .join("\n");
 
+const computedPropertiesCode = computedProperties
+  .map((computedProperty) => {
+    return `get ${computedProperty.name}() {
+      return ${computedProperty.value};
+    }`;
+  })
+  .join("\n");
+
 if (valueInitCode.length != 0) {
   if (valueInitPosition !== -1) {
     tsOutput.prependRight(valueInitPosition, valueInitCode);
@@ -353,13 +341,13 @@ if (valueInitCode.length != 0) {
         super();
         ${valueInitCode}
       }`;
-    tsOutput.prependRight(constructorInjectPosition, constructorCode);
+    tsOutput.prependRight(newMethodInjectPosition, constructorCode);
   }
 }
 
-// const contents = getLit(info, modifiedTemplate, imports);
-// fs.writeFileSync(tsOutputFile, contents);
-
+if (computedPropertiesCode.length != 0) {
+  tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
+}
 function prependWithThis(expression: string) {
   const s = new MagicString(expression);
   const expr = acorn.parse(expression);
