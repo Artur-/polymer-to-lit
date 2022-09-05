@@ -2,8 +2,7 @@ import { html, LitElement, css } from "lit";
 
 class DisabledUsingMethod extends LitElement {
   render() {
-    return html`
-      <vaadin-vertical-layout id="buttons">
+    return html`<vaadin-vertical-layout id="buttons">
         <vaadin-button
           id="signUp"
           theme="primary"
@@ -20,8 +19,8 @@ class DisabledUsingMethod extends LitElement {
       </vaadin-vertical-layout>
 
       <span class="payment-notes">Month-to-month @ $500 / month</span>
-      <a class="support" .href="${this.contactLink}">Contact Support</a>
-    `;
+
+      <a class="support" .href="${this.contactLink}">Contact Support</a> `;
   }
 
   and(a, b) {
