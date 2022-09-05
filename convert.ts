@@ -339,15 +339,17 @@ const valueInitCode = initValues
   })
   .join("\n");
 
-if (valueInitPosition !== -1) {
-  tsOutput.prependRight(valueInitPosition, valueInitCode);
-} else {
-  // No constructor
-  const constructorCode = `constructor() {
-    super();
-    ${valueInitCode}
-  }`;
-  tsOutput.prependRight(constructorInjectPosition, constructorCode);
+if (valueInitCode.length != 0) {
+  if (valueInitPosition !== -1) {
+    tsOutput.prependRight(valueInitPosition, valueInitCode);
+  } else {
+    // No constructor
+    const constructorCode = `constructor() {
+        super();
+        ${valueInitCode}
+      }`;
+    tsOutput.prependRight(constructorInjectPosition, constructorCode);
+  }
 }
 
 // const contents = getLit(info, modifiedTemplate, imports);
