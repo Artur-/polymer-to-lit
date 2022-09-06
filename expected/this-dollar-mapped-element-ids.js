@@ -22,8 +22,8 @@ class ThisDollarMappedElement extends LitElement {
     return "this-dollar-mapped-element";
   }
 
-  ready() {
-    super.ready();
+  firstUpdated(_changedProperties) {
+    super.firstUpdated(_changedProperties);
 
     const grid = this.querySelector("#grid");
     console.log("Grid is ", grid);
