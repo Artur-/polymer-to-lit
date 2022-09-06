@@ -181,23 +181,17 @@ const rewriteElement = (element) => {
     element.tagName === "TEMPLATE" &&
     element.getAttribute("is") === "dom-if"
   ) {
-    const ifAttr = element.getAttribute("if");
-    const expression = ifAttr.substring(2, ifAttr.length - 2);
-
-    replaceWithLitIf(element, expression, element.innerHTML);
-
-    // console.log(element);
-    // } else
+    const polymerExpression = element.getAttribute("if");
+    replaceWithLitIf(element, polymerExpression, element);
+    return;
   } else if (element.tagName === "DOM-IF") {
     const template = element.childNodes.filter(
       (el) => el.tagName === "TEMPLATE"
     )[0];
-    const ifAttr = element.getAttribute("if");
-    const expression = ifAttr.substring(2, ifAttr.length - 2);
-
-    replaceWithLitIf(element, expression, template.innerHTML);
-  }
-  if (element.attributes) {
+    const polymerExpression = element.getAttribute("if");
+    replaceWithLitIf(element, polymerExpression, template);
+    return;
+  } else if (element.attributes) {
     // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
     for (const key of Object.keys(element.attributes)) {
       const value = element.attributes[key];
@@ -417,8 +411,18 @@ function rewriteHtmlNode(child: any) {
     console.log("unhandled child", child);
   }
 }
-function replaceWithLitIf(element: any, expression: string, content: string) {
+function replaceWithLitIf(
+  element: any,
+  polymerExpression: string,
+  template: any
+) {
+  const expression = polymerExpression.substring(
+    2,
+    polymerExpression.length - 2
+  );
+
   const litExpression = prependWithThis(expression);
-  const litIf = `\${${litExpression} ? html\`${content}\` : html\`\`}`;
+  template.childNodes.forEach((child) => rewriteElement(child));
+  const litIf = `\${${litExpression} ? html\`${template.innerHTML}\` : html\`\`}`;
   element.replaceWith(litIf);
 }

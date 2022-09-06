@@ -8,14 +8,14 @@ class DomIfTest extends LitElement {
       <vaadin-vertical-layout>
         ${this.showDetails
           ? html`
-              <span>Here are some details you asked for</span>
-              <span>Here are more details you asked for</span>
+              <span>Here are some details you asked for ${this.name}</span>
+              <span>Here are more details you asked for ${this.name}</span>
             `
           : html``}
         ${this.showDetails
           ? html`
-              <span>Here some more details</span>
-              <span>Here even more details</span>
+              <span>Here some more details, ${this.name}</span>
+              <span>Here even more details, ${this.name}</span>
             `
           : html``}
       </vaadin-vertical-layout>

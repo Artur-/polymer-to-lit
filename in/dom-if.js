@@ -7,13 +7,13 @@ class DomIfTest extends PolymerElement {
     return html`
       <vaadin-vertical-layout>
         <template is="dom-if" if="{{showDetails}}">
-          <span>Here are some details you asked for</span>
-          <span>Here are more details you asked for</span>
+          <span>Here are some details you asked for [[name]]</span>
+          <span>Here are more details you asked for [[name]]</span>
         </template>
         <dom-if if="{{showDetails}}">
           <template>
-            <span>Here some more details</span>
-            <span>Here even more details</span>
+            <span>Here some more details, [[name]]</span>
+            <span>Here even more details, [[name]]</span>
           </template>
         </dom-if>
       </vaadin-vertical-layout>
