@@ -22,7 +22,7 @@ class ReadyCallback extends LitElement {
 
     div = document.createElement("div");
     div.innerText = "Created in ready()";
-    this.querySelector("#container").appendChild(div);
+    this.renderRoot.querySelector("#container").appendChild(div);
     this.property = "Value set in ready()";
   }
 }

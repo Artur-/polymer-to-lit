@@ -555,7 +555,7 @@ function thisResolver(expression: string) {
 }
 
 let output = tsOutput.toString();
-output = output.replace(/this.\$.([^;., ()]*)/g, `this.querySelector("#$1")`);
+output = output.replace(/this.\$.([^;., ()]*)/g, `this.renderRoot.querySelector("#$1")`);
 const prettified = prettier.format(output, {
   parser: "typescript",
 });

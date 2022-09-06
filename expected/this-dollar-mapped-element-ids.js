@@ -25,7 +25,7 @@ class ThisDollarMappedElement extends LitElement {
   firstUpdated(_changedProperties) {
     super.firstUpdated(_changedProperties);
 
-    const grid = this.querySelector("#grid");
+    const grid = this.renderRoot.querySelector("#grid");
     console.log("Grid is ", grid);
   }
 
@@ -34,7 +34,7 @@ class ThisDollarMappedElement extends LitElement {
     if (!e.detail.value) {
       return;
     }
-    var content = this.querySelector("#dialog").$.overlay.content;
+    var content = this.renderRoot.querySelector("#dialog").$.overlay.content;
     console.log("content is ", content);
   }
 }
