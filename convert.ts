@@ -65,6 +65,21 @@ return html\`${html}\`;
       tag = classContent.value.body.body[0].argument.value;
       // console.log(getSource(classContent));
     } else if (
+      classContent.type == "MethodDefinition" &&
+      classContent.key.name == "ready"
+    ) {
+      // There is no 'ready' callback but it is approximately run at the same time as 'firstUpdated'
+      // tsOutput.overwrite(classContent.key.start, classContent.key.end, "firstUpdated");
+      // console.log(classContent);
+      const src = getSource(classContent);
+      tsOutput.overwrite(
+        classContent.start,
+        classContent.end,
+        src
+          .replace("ready()", "firstUpdated(_changedProperties)")
+          .replace("super.ready()", "super.firstUpdated(_changedProperties)")
+      );
+    } else if (
       classContent.type === "MethodDefinition" &&
       classContent.kind === "get" &&
       classContent.key.name === "properties"
