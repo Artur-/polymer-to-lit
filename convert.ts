@@ -118,7 +118,6 @@ const modifyClass = (node: any) => {
             // first: String
             // type of property
           } else {
-            // console.log(prop.value.type);
             prop.value.properties.forEach((typeValue) => {
               const keyNode = typeValue.key;
               const valueNode = typeValue.value;
@@ -496,7 +495,7 @@ const valueInitCode = initValues
 
 const computedPropertiesCode = computedProperties
   .map((computedProperty) => {
-    `get ${computedProperty.name}() {
+    return `get ${computedProperty.name}() {
       return ${computedProperty.value};
     }`;
   })
