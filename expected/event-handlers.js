@@ -3,45 +3,34 @@ import { html, LitElement, css } from "lit";
 class EventHandlers extends LitElement {
   render() {
     return html`
-        <vaadin-vertical-layout class="form-cont">
-          <vaadin-text-field
-            id="name"
-            label="Name"
-            required
-            @change="${this.formUpdated}"
-            error-message="Please enter your name here"
-            value="${this.name}"
-            @value-changed="${(e) => this.name=e.target.value}"
-          ></vaadin-text-field>
-        </vaadin-vertical-layout>
-        <vaadin-vertical-layout id="buttons">
-          <vaadin-button
-            id="signUp"
-            theme="primary"
-             @click="${this.submit}"
-            >Sign Up</vaadin-button
+      <vaadin-vertical-layout class="form-cont">
+        <vaadin-text-field
+          id="name"
+          label="Name"
+          required
+          error-message="Please enter your name here"
+          @change="${this.formUpdated}"
+          .value="${this.name}"
+          @value-changed="${(e) => (this.name = e.target.value)}"
+        ></vaadin-text-field>
+        <div class="row">
+          <vaadin-combo-box
+            id="statuses"
+            label="Status"
+            .items="${this.availableStatuses}"
+            .value="${this.status}"
+            @value-changed="${(e) => (this.status = e.target.value)}"
           >
-          <vaadin-button id="cancelSignUpBtn" theme="tertiary" on-click="cancelButtonClicked"
-            >Cancel</vaadin-button
-          >
-          
-        </vaadin-vertical-layout>
-
-        <span class="payment-notes">Month-to-month @ $500 / month</span>
+          </vaadin-combo-box>
+        </div>
       </vaadin-vertical-layout>
-
-      </vaadin-vertical-layout>
-      <a class="support" href="{{contactLink}}">Contact Support</a>
-    </div>
-`;
+    `;
   }
 
   static get is() {
     return "event-handlers";
   }
 
-  // submit is called when the user clicks the submit button. They are only able to do that once all the data has been
-  // validated by us and by Stripe (Stripe naturally only validates the credit card information on their side)
   submit() {
     console.log("Submit clicked");
   }

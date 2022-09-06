@@ -1,14 +1,14 @@
-import { html, LitElement, css } from "lit";
+import { html, PolymerElement } from "@polymer/polymer/polymer-element.js";
 
 class EventHandlers extends PolymerElement {
-  render() {
+  static get template() {
     return html`
       <vaadin-vertical-layout class="form-cont">
         <vaadin-text-field
           id="name"
           label="Name"
           required
-          @change="${this.formUpdated}"
+          on-change="formUpdated"
           error-message="Please enter your name here"
           value="{{name}}"
         ></vaadin-text-field>
@@ -29,8 +29,6 @@ class EventHandlers extends PolymerElement {
     return "event-handlers";
   }
 
-  // submit is called when the user clicks the submit button. They are only able to do that once all the data has been
-  // validated by us and by Stripe (Stripe naturally only validates the credit card information on their side)
   submit() {
     console.log("Submit clicked");
   }

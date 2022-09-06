@@ -17,8 +17,6 @@ class ComputedProperty extends PolymerElement {
       last: String,
       fullName: {
         type: String,
-        // when `first` or `last` changes `computeFullName` is called once
-        // and the value it returns is stored as `fullName`
         computed: "computeFullName(first, last)",
       },
     };

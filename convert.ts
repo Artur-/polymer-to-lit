@@ -9,7 +9,7 @@ import MagicString from "magic-string";
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const jsInputFile = process.argv[2];
-const tsOutputFile = jsInputFile.replace(".js",".out.js");
+const tsOutputFile = jsInputFile.replace(".js", ".out.js");
 const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
@@ -484,10 +484,10 @@ if (valueInitCode.length != 0) {
 if (computedPropertiesCode.length != 0) {
   tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
 }
+
 function thisResolver(expression: string) {
   const s = new MagicString(expression);
   const expr = acorn.parse(expression);
-  // console.log((expr as any).body[0].expression.argument);
   walk.simple(expr, {
     Identifier(node: any) {
       s.overwrite(node.start, node.end, "this." + node.name);
@@ -497,9 +497,9 @@ function thisResolver(expression: string) {
   return s.toString();
 }
 
-console.log();
-console.log("------------");
-const prettified = prettier.format(tsOutput.toString(), { parser: "typescript" });
+const prettified = prettier.format(tsOutput.toString(), {
+  parser: "typescript",
+});
 fs.writeFileSync(tsOutputFile, prettified);
 function removeImport(node: any, ...identifiersOrFrom: string[]) {
   const remove: any[] = [];

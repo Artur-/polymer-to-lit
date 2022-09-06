@@ -2,11 +2,13 @@ import { html, LitElement, css } from "lit";
 
 class ComputedProperty extends LitElement {
   render() {
-    return html`<vaadin-vertical-layout>
-      <span>First: ${this.first}</span>
-      <span>First: ${this.last}</span>
-      <span>First: ${this.fullName}</span>
-    </vaadin-vertical-layout>`;
+    return html`
+      <vaadin-vertical-layout>
+        <span>First: ${this.first}</span>
+        <span>First: ${this.last}</span>
+        <span>First: ${this.fullName}</span>
+      </vaadin-vertical-layout>
+    `;
   }
 
   static get properties() {

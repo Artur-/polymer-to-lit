@@ -5,7 +5,7 @@ class BasicBindings extends PolymerElement {
     return html`
       <vaadin-vertical-layout id="buttons">
         <vaadin-button id="[[buttonId]]">[[buttonText]]</vaadin-button>
-        <vaadin-text-field value="{{textfieldValue}}"></vaadin-text-field>
+        <vaadin-text-field value="[[textfieldValue]]"></vaadin-text-field>
       </vaadin-vertical-layout>
     `;
   }
