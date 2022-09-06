@@ -1,39 +1,28 @@
-import { html, PolymerElement } from "@polymer/polymer/polymer-element.js";
+import { html, LitElement, css } from "lit";
 
 class EventHandlers extends PolymerElement {
-  static get template() {
+  render() {
     return html`
-        <vaadin-vertical-layout class="form-cont">
-          <vaadin-text-field
-            id="name"
-            label="Name"
-            required
-            on-change="formUpdated"
-            error-message="Please enter your name here"
-            value="{{name}}"
-          ></vaadin-text-field>
-        </vaadin-vertical-layout>
-        <vaadin-vertical-layout id="buttons">
-          <vaadin-button
-            id="signUp"
-            theme="primary"
-            disabled="[[!and(isStripeComplete, isFormComplete)]]"
-             on-click="submit"
-            >Sign Up</vaadin-button
+      <vaadin-vertical-layout class="form-cont">
+        <vaadin-text-field
+          id="name"
+          label="Name"
+          required
+          @change="${this.formUpdated}"
+          error-message="Please enter your name here"
+          value="{{name}}"
+        ></vaadin-text-field>
+        <div class="row">
+          <vaadin-combo-box
+            id="statuses"
+            label="Status"
+            items="[[availableStatuses]]"
+            value="{{status}}"
           >
-          <vaadin-button id="cancelSignUpBtn" theme="tertiary" on-click="cancelButtonClicked"
-            >Cancel</vaadin-button
-          >
-          
-        </vaadin-vertical-layout>
-
-        <span class="payment-notes">Month-to-month @ $500 / month</span>
+          </vaadin-combo-box>
+        </div>
       </vaadin-vertical-layout>
-
-      </vaadin-vertical-layout>
-      <a class="support" href="{{contactLink}}">Contact Support</a>
-    </div>
-`;
+    `;
   }
 
   static get is() {

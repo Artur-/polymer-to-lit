@@ -99,7 +99,6 @@ return html\`${html}\`;
                     removeIncludingTrailingComma(typeValue);
                   }
                 } else if (keyNode.name === "computed") {
-
                   computedProperties.push({
                     name: propName,
                     value: prependWithThis(valueNode.value),
@@ -178,8 +177,28 @@ const rewriteTextNode = (node) => {
 };
 
 const rewriteElement = (element) => {
-  // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
+  if (
+    element.tagName === "TEMPLATE" &&
+    element.getAttribute("is") === "dom-if"
+  ) {
+    const ifAttr = element.getAttribute("if");
+    const expression = ifAttr.substring(2, ifAttr.length - 2);
+
+    replaceWithLitIf(element, expression, element.innerHTML);
+
+    // console.log(element);
+    // } else
+  } else if (element.tagName === "DOM-IF") {
+    const template = element.childNodes.filter(
+      (el) => el.tagName === "TEMPLATE"
+    )[0];
+    const ifAttr = element.getAttribute("if");
+    const expression = ifAttr.substring(2, ifAttr.length - 2);
+
+    replaceWithLitIf(element, expression, template.innerHTML);
+  }
   if (element.attributes) {
+    // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
     for (const key of Object.keys(element.attributes)) {
       const value = element.attributes[key];
 
@@ -243,15 +262,15 @@ const modifyTemplate = (inputHtml) => {
     pre: true,
     comment: true,
   });
-  //console.log(root.innerHTML);
+  // console.log(root.innerHTML);
   const htmls: string[] = [];
   const styles: string[] = [];
   const styleIncludes: string[] = [];
   for (const child of root.childNodes) {
     // console.log(child);
-    if (child.tagName == "custom-style" || child.tagName == "style") {
+    if (child.tagName == "CUSTOM-STYLE" || child.tagName == "STYLE") {
       let style;
-      if (child.tagName == "custom-style") {
+      if (child.tagName == "CUSTOM-STYLE") {
         style = child.childNodes[1];
       } else {
         style = child;
@@ -388,4 +407,9 @@ function rewriteHtmlNode(child: any) {
   } else {
     console.log("unhandled child", child);
   }
+}
+function replaceWithLitIf(element: any, expression: string, content: string) {
+  const litExpression = prependWithThis(expression);
+  const litIf = `\${${litExpression} ? html\`${content}\` : html\`\`}`;
+  element.replaceWith(litIf);
 }
