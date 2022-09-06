@@ -72,6 +72,20 @@ const modifyClass = (node: any) => {
       // console.log(getSource(classContent));
     } else if (
       classContent.type == "MethodDefinition" &&
+      classContent.key.name == "_attachDom"
+    ) {
+      // Assume this means it it using light dom
+      tsOutput.overwrite(
+        classContent.start,
+        classContent.end,
+        `createRenderRoot() {
+          // Do not use a shadow root
+          return this;
+        }
+        `
+      );
+    } else if (
+      classContent.type == "MethodDefinition" &&
       classContent.key.name == "ready"
     ) {
       // There is no 'ready' callback but it is approximately run at the same time as 'firstUpdated'
