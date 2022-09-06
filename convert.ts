@@ -15,6 +15,7 @@ const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
 const initValues: any[] = [];
 const computedProperties: any[] = [];
+const observedProperties: any[] = [];
 let valueInitPosition = -1;
 let newMethodInjectPosition = -1;
 let usesRepeat = false;
@@ -147,6 +148,21 @@ const modifyClass = (node: any) => {
                     value: thisResolver(valueNode.value),
                   });
                   removeIncludingTrailingComma(typeValue);
+                } else if (keyNode.name === "observer") {
+                  const observer = valueNode.value;
+                  if (observer.includes("(")) {
+                    // Complex observer
+                    tsOutput.prependLeft(
+                      valueNode.start,
+                      "/* TODO: Convert this complex observer manually */\n"
+                    );
+                  } else {
+                    observedProperties.push({
+                      name: propName,
+                      value: observer,
+                    });
+                    removeIncludingTrailingComma(typeValue);
+                  }
                 }
               }
             });
@@ -466,12 +482,27 @@ const valueInitCode = initValues
 
 const computedPropertiesCode = computedProperties
   .map((computedProperty) => {
-    return `get ${computedProperty.name}() {
+    `get ${computedProperty.name}() {
       return ${computedProperty.value};
     }`;
   })
   .join("\n");
 
+const observedPropertiesCode = observedProperties
+  .map((observedProperty) => {
+    const variable = observedProperty.name;
+    const observer = observedProperty.value;
+    return `set ${variable}(newValue) {
+      const oldValue = this.${variable};
+      this._${variable} = newValue;
+      this.${observer}(newValue, oldValue);
+    }
+    get ${variable}() {
+      return this._${variable};
+    }
+  `;
+  })
+  .join("\n");
 if (valueInitCode.length != 0) {
   if (valueInitPosition !== -1) {
     tsOutput.prependRight(valueInitPosition, valueInitCode);
@@ -485,6 +516,9 @@ if (valueInitCode.length != 0) {
   }
 }
 
+if (observedPropertiesCode.length != 0) {
+  tsOutput.prependRight(newMethodInjectPosition, observedPropertiesCode);
+}
 if (computedPropertiesCode.length != 0) {
   tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
 }
