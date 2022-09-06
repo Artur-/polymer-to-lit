@@ -17,7 +17,10 @@ const initValues: any[] = [];
 const computedProperties: any[] = [];
 let valueInitPosition = -1;
 let newMethodInjectPosition = -1;
-let repeatUsed = false;
+let usesRepeat = false;
+let usesHeaderRenderer = false;
+let usesBodyRenderer = false;
+let usesFooterRenderer = false;
 
 const body = (polymerJs as any).body;
 const modifyClass = (node: any) => {
@@ -95,7 +98,6 @@ return html\`${html}\`;
                       name: propName,
                       value: initValue,
                     });
-                    removeIncludingTrailingComma(typeValue);
                   } else if (valueNode.type === "FunctionExpression") {
                     if (valueNode?.body?.body[0]?.type === "ReturnStatement") {
                       const arrayExpression = getSource(
@@ -105,9 +107,21 @@ return html\`${html}\`;
                         name: propName,
                         value: arrayExpression,
                       });
-                      removeIncludingTrailingComma(typeValue);
                     }
+                  } else if (valueNode.type === "ArrayExpression") {
+                    initValues.push({
+                      name: propName,
+                      value: getSource(valueNode),
+                    });
+                  } else {
+                    console.log(
+                      "UNKNOWN type of 'value' for property",
+                      propName,
+                      ":",
+                      valueNode.type
+                    );
                   }
+                  removeIncludingTrailingComma(typeValue);
                 } else if (keyNode.name === "computed") {
                   computedProperties.push({
                     name: propName,
@@ -217,10 +231,77 @@ const rewriteElement = (element: any, resolver: Resolver) => {
     element.tagName === "TEMPLATE" &&
     element.getAttribute("is") === "dom-repeat"
   ) {
-    const parent = element.parentNode;
     const polymerItemsExpression = element.getAttribute("items");
     replaceWithLitRepeat(element, polymerItemsExpression, resolver, element);
     return;
+  } else if (element.tagName === "VAADIN-GRID-COLUMN") {
+    const templates = element.childNodes.filter(
+      (child) => child.tagName === "TEMPLATE"
+    );
+    const headerTemplate = templates.find(
+      (template) => template.getAttribute("class") === "header"
+    );
+    const bodyTemplate = templates.find(
+      (template) => !template.hasAttribute("class")
+    );
+    const footerTemplate = templates.find(
+      (template) => template.getAttribute("class") === "footer"
+    );
+
+    if (headerTemplate) {
+      usesHeaderRenderer = true;
+      headerTemplate.childNodes.forEach((child) =>
+        rewriteHtmlNode(child, resolver)
+      );
+
+      element.setAttribute(
+        `\${columnHeaderRenderer(
+        (column) =>
+          html\`${headerTemplate.innerHTML}\`
+      )}
+      `,
+        ""
+      );
+      headerTemplate.remove();
+    }
+    if (bodyTemplate) {
+      usesBodyRenderer = true;
+      bodyTemplate.childNodes.forEach((child) =>
+        rewriteHtmlNode(child, (expression) => {
+          if (expression.startsWith("item.")) {
+            return expression;
+          }
+
+          return resolver(expression);
+        })
+      );
+
+      element.setAttribute(
+        `\${columnBodyRenderer(
+        (item) =>
+          html\`${bodyTemplate.innerHTML}\`
+      )}
+      `,
+        ""
+      );
+      bodyTemplate.remove();
+    }
+    if (footerTemplate) {
+      usesFooterRenderer = true;
+      footerTemplate.childNodes.forEach((child) =>
+        rewriteHtmlNode(child, resolver)
+      );
+
+      element.setAttribute(
+        `\${columnFooterRenderer(
+        (column) =>
+          html\`${footerTemplate.innerHTML}\`
+      )}
+      `,
+        ""
+      );
+      footerTemplate.remove();
+    }
   } else if (element.attributes) {
     // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
     for (const key of Object.keys(element.attributes)) {
@@ -359,11 +440,19 @@ for (const node of body) {
   }
 }
 
-tsOutput.prepend(`import { html, LitElement, css } from "lit";
-`);
-if (repeatUsed) {
-  tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";
-  `);
+tsOutput.prepend(`import { html, LitElement, css } from "lit";\n`);
+if (usesRepeat) {
+  tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";\n`);
+}
+
+const usedRenderers: string[] = [];
+if (usesBodyRenderer) usedRenderers.push("columnBodyRenderer");
+if (usesFooterRenderer) usedRenderers.push("columnFooterRenderer");
+if (usesHeaderRenderer) usedRenderers.push("columnHeaderRenderer");
+if (usedRenderers.length !== 0) {
+  tsOutput.prepend(
+    `import { ${usedRenderers.join(", ")} } from "@vaadin/grid/lit.js";\n`
+  );
 }
 
 const valueInitCode = initValues
@@ -466,7 +555,7 @@ function replaceWithLitRepeat(
   resolver: Resolver,
   template: any
 ) {
-  repeatUsed = true;
+  usesRepeat = true;
   const expression = polymerItemsExpression.substring(
     2,
     polymerItemsExpression.length - 2
