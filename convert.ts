@@ -47,16 +47,21 @@ const modifyClass = (node: any) => {
       const modifiedTemplate = modifyTemplate(template);
 
       const html = modifiedTemplate.htmls.join("\n");
-      const css = modifiedTemplate.styles.join("\n"); //TODO
-      const importStatements = imports.join("\n"); //TODO
+      // const css = modifiedTemplate.styles.join("\n"); //TODO
+      const hasStyles = modifiedTemplate.styles.length > 0;
+      const stylesGetter = `  static get styles() {
+        return [
+          ${modifiedTemplate.styles.map((css) => `css\`${css}\``).join(",")}
+        ];
+      }`;
 
-      // console.log(getSource(classContent))
+      const renderMethod = `render() {
+        return html\`${html}\`;
+              }`;
       tsOutput.overwrite(
         classContent.start,
         classContent.end,
-        `render() {
-return html\`${html}\`;
-      }`
+        (hasStyles ? stylesGetter : "") + renderMethod
       );
     } else if (
       classContent.type == "MethodDefinition" &&
@@ -395,7 +400,6 @@ const modifyTemplate = (inputHtml) => {
       if (includes) {
         styleIncludes.push(...includes.split(" "));
       }
-      // console.log(style.innerHTML);
       const css = style.innerHTML;
       styles.push(css);
       child.remove();
@@ -420,7 +424,6 @@ const modifyTemplate = (inputHtml) => {
   return ret;
 };
 
-const imports: string[] = [];
 const getSource = (node: any) => {
   return jsContents.substring(node.start, node.end);
 };
@@ -428,20 +431,6 @@ const skipImports = [
   "@polymer/polymer/polymer-element.js",
   "@polymer/polymer/lib/utils/html-tag.js",
 ];
-for (const node of body) {
-  if (node.type == "ImportDeclaration") {
-    /*    if (node.specifiers) {
-      node.specifiers.forEach((specifier) => console.log(specifier));
-    }
-    console.log(Object.keys(node));
-    */
-
-    if (!skipImports.includes(node.source.value)) {
-      // console.log(node.source);
-      imports.push(getSource(node));
-    }
-  }
-}
 for (const node of body) {
   if (node.type === "ClassDeclaration") {
     modifyClass(node);
