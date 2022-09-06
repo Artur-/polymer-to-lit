@@ -9,7 +9,7 @@ import MagicString from "magic-string";
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const jsInputFile = process.argv[2];
-const tsOutputFile = jsInputFile.replace(".js", ".ts");
+const tsOutputFile = jsInputFile.replace(".js",".out.js");
 const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });

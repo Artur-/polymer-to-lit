@@ -1,5 +1,5 @@
 .DS_Store
 node_modules/
-in/*.ts
+in/*.out.js
 convert.js
 *~
