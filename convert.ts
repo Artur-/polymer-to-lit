@@ -497,7 +497,9 @@ function thisResolver(expression: string) {
   return s.toString();
 }
 
-const prettified = prettier.format(tsOutput.toString(), {
+let output = tsOutput.toString();
+output = output.replace(/this.\$.([^;., ()]*)/g, `this.querySelector("#$1")`);
+const prettified = prettier.format(output, {
   parser: "typescript",
 });
 fs.writeFileSync(tsOutputFile, prettified);
