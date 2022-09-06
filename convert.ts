@@ -17,6 +17,7 @@ const initValues: any[] = [];
 const computedProperties: any[] = [];
 let valueInitPosition = -1;
 let newMethodInjectPosition = -1;
+let repeatUsed = false;
 
 const body = (polymerJs as any).body;
 const modifyClass = (node: any) => {
@@ -84,24 +85,33 @@ return html\`${html}\`;
             prop.value.properties.forEach((typeValue) => {
               const keyNode = typeValue.key;
               const valueNode = typeValue.value;
+
               if (keyNode.type === "Identifier") {
                 if (keyNode.name === "value") {
                   // Value initialization that must go into the constructor
                   if (valueNode.type === "Literal") {
-                    // const value = valueNode.name;
                     const initValue = valueNode.raw;
                     initValues.push({
                       name: propName,
                       value: initValue,
                     });
-                    // console.log(propName, "=", initValue);
-                    // console.log(getSource(typeValue));
                     removeIncludingTrailingComma(typeValue);
+                  } else if (valueNode.type === "FunctionExpression") {
+                    if (valueNode?.body?.body[0]?.type === "ReturnStatement") {
+                      const arrayExpression = getSource(
+                        valueNode.body.body[0].argument
+                      );
+                      initValues.push({
+                        name: propName,
+                        value: arrayExpression,
+                      });
+                      removeIncludingTrailingComma(typeValue);
+                    }
                   }
                 } else if (keyNode.name === "computed") {
                   computedProperties.push({
                     name: propName,
-                    value: prependWithThis(valueNode.value),
+                    value: thisResolver(valueNode.value),
                   });
                   removeIncludingTrailingComma(typeValue);
                 }
@@ -115,9 +125,7 @@ return html\`${html}\`;
       classContent.kind === "constructor"
     ) {
       const constructorNode = classContent;
-      // console.log(constructorNode.value.body);
       valueInitPosition = constructorNode.value.body.end - 1;
-      // console.log(getSource(constructorNode.value.body));
     } else {
       // console.log("Unhandled class content", classContent);
     }
@@ -165,31 +173,53 @@ const removeIncludingTrailingComma = (node) => {
   // }
   // Fixme trailing ,
 };
-const rewriteTextNode = (node) => {
+const rewriteTextNode = (node, resolver) => {
   const bindingRe = /\[\[(.+)\]\]/g;
   const bindingRe2 = /\{\{(.+)\}\}/g;
 
   var result = node.rawText;
-  result = result.replace(bindingRe, `\${this.$1}`);
-  result = result.replace(bindingRe2, `\${this.$1}`);
-
+  result = result.replace(bindingRe, (_fullMatch, variableName) => {
+    const resolved = resolver(variableName);
+    return `\${${resolved}}`;
+  });
+  result = result.replace(bindingRe2, (_fullMatch, variableName) => {
+    const resolved = resolver(variableName);
+    return `\${${resolved}}`;
+  });
   node.rawText = result;
 };
 
-const rewriteElement = (element) => {
+type Resolver = (expression: string) => string;
+
+const rewriteElement = (element: any, resolver: Resolver) => {
   if (
     element.tagName === "TEMPLATE" &&
     element.getAttribute("is") === "dom-if"
   ) {
     const polymerExpression = element.getAttribute("if");
-    replaceWithLitIf(element, polymerExpression, element);
+    replaceWithLitIf(element, polymerExpression, resolver, element);
     return;
   } else if (element.tagName === "DOM-IF") {
     const template = element.childNodes.filter(
       (el) => el.tagName === "TEMPLATE"
     )[0];
     const polymerExpression = element.getAttribute("if");
-    replaceWithLitIf(element, polymerExpression, template);
+    replaceWithLitIf(element, polymerExpression, resolver, template);
+    return;
+  } else if (element.tagName === "DOM-REPEAT") {
+    const template = element.childNodes.filter(
+      (el) => el.tagName === "TEMPLATE"
+    )[0];
+    const polymerItemsExpression = element.getAttribute("items");
+    replaceWithLitRepeat(element, polymerItemsExpression, resolver, template);
+    return;
+  } else if (
+    element.tagName === "TEMPLATE" &&
+    element.getAttribute("is") === "dom-repeat"
+  ) {
+    const parent = element.parentNode;
+    const polymerItemsExpression = element.getAttribute("items");
+    replaceWithLitRepeat(element, polymerItemsExpression, resolver, element);
     return;
   } else if (element.attributes) {
     // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
@@ -213,17 +243,14 @@ const rewriteElement = (element) => {
           // console.log("Rewrite attr: ", key, value);
           element.setAttribute(
             key.replace("$", ""),
-            "${" + prependWithThis(expression) + "}"
+            "${" + resolver(expression) + "}"
           );
           element.removeAttribute(key);
         } else {
           // property binding prop="[[foo]]" => .prop=${this.foo}
           // prop="[[!and(property1, property2)]]" => .prop=${!this.and(this.property1, this.property2)}
           // console.log("Rewrite prop: ", key, value);
-          element.setAttribute(
-            "." + key,
-            "${" + prependWithThis(expression) + "}"
-          );
+          element.setAttribute("." + key, "${" + resolver(expression) + "}");
           element.removeAttribute(key);
         }
 
@@ -231,7 +258,7 @@ const rewriteElement = (element) => {
           // @value-change=${(e) => (this.name = e.target.value)}
           const eventName = key + "-changed";
           const attributeKey = "@" + eventName;
-          const attributeValue = `\${(e) => (${prependWithThis(
+          const attributeValue = `\${(e) => (${resolver(
             expression
           )} = e.target.value)}`;
           element.setAttribute(attributeKey, attributeValue);
@@ -242,7 +269,7 @@ const rewriteElement = (element) => {
 
   //
   for (const child of element.childNodes) {
-    rewriteHtmlNode(child);
+    rewriteHtmlNode(child, resolver);
   }
 };
 const modifyTemplate = (inputHtml) => {
@@ -276,13 +303,14 @@ const modifyTemplate = (inputHtml) => {
       // console.log(style.innerHTML);
       const css = style.innerHTML;
       styles.push(css);
+      child.remove();
     } else {
-      rewriteHtmlNode(child);
-      if (child.nodeType === 1) {
-        htmls.push(child.outerHTML);
-      } else {
-        htmls.push(child.rawText);
-      }
+      rewriteHtmlNode(child, thisResolver);
+      // if (child.nodeType === 1) {
+      //   htmls.push(child.outerHTML);
+      // } else {
+      //   htmls.push(child.rawText);
+      // }
       // TODO rewrite dom-repeat
       // TODO rewrite dom-if
       // TODO rewrite dom-repeat
@@ -290,6 +318,7 @@ const modifyTemplate = (inputHtml) => {
       // TODO <template> tags
     }
   }
+  htmls.push(root.innerHTML);
 
   const ret = { htmls, styles, styleIncludes };
   //console.log(ret);
@@ -324,6 +353,7 @@ for (const node of body) {
   } else if (node.type === "ImportDeclaration") {
     removeImport(node, "html", "PolymerElement");
     removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
+    removeImport(node, "@polymer/polymer/lib/elements/dom-repeat.js");
   } else if (!getSource(node).includes("customElements.define")) {
     console.log("WARNING: Unhandled root node", node.type, getSource(node));
   }
@@ -331,6 +361,10 @@ for (const node of body) {
 
 tsOutput.prepend(`import { html, LitElement, css } from "lit";
 `);
+if (repeatUsed) {
+  tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";
+  `);
+}
 
 const valueInitCode = initValues
   .map((initValue) => {
@@ -362,7 +396,7 @@ if (valueInitCode.length != 0) {
 if (computedPropertiesCode.length != 0) {
   tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
 }
-function prependWithThis(expression: string) {
+function thisResolver(expression: string) {
   const s = new MagicString(expression);
   const expr = acorn.parse(expression);
   // console.log((expr as any).body[0].expression.argument);
@@ -385,7 +419,6 @@ function removeImport(node: any, ...identifiersOrFrom: string[]) {
     return;
   }
   node.specifiers.forEach((specifier) => {
-
     if (identifiersOrFrom.includes(specifier?.imported?.name)) {
       remove.push(specifier);
     }
@@ -402,11 +435,11 @@ function removeImport(node: any, ...identifiersOrFrom: string[]) {
     remove.forEach((specifier) => removeIncludingTrailingComma(specifier));
   }
 }
-function rewriteHtmlNode(child: any) {
+function rewriteHtmlNode(child: any, resolver: Resolver) {
   if (child.nodeType === 1) {
-    rewriteElement(child);
+    rewriteElement(child, resolver);
   } else if (child.nodeType === 3) {
-    rewriteTextNode(child);
+    rewriteTextNode(child, resolver);
   } else {
     console.log("unhandled child", child);
   }
@@ -414,6 +447,7 @@ function rewriteHtmlNode(child: any) {
 function replaceWithLitIf(
   element: any,
   polymerExpression: string,
+  resolver: Resolver,
   template: any
 ) {
   const expression = polymerExpression.substring(
@@ -421,8 +455,38 @@ function replaceWithLitIf(
     polymerExpression.length - 2
   );
 
-  const litExpression = prependWithThis(expression);
-  template.childNodes.forEach((child) => rewriteElement(child));
+  const litExpression = resolver(expression);
+  template.childNodes.forEach((child) => rewriteElement(child, resolver));
   const litIf = `\${${litExpression} ? html\`${template.innerHTML}\` : html\`\`}`;
   element.replaceWith(litIf);
+}
+function replaceWithLitRepeat(
+  element: any,
+  polymerItemsExpression: string,
+  resolver: Resolver,
+  template: any
+) {
+  repeatUsed = true;
+  const expression = polymerItemsExpression.substring(
+    2,
+    polymerItemsExpression.length - 2
+  );
+  const litExpression = resolver(expression);
+  template.childNodes.forEach((child) =>
+    rewriteElement(child, (expression) => {
+      if (expression === "index") {
+        return "index";
+      }
+      if (expression.startsWith("item.")) {
+        // This is the loop variable
+        return expression;
+      }
+
+      return resolver(expression);
+    })
+  );
+
+  const litRepeat = `\${${litExpression}.map(
+    (item, index) => html\`${template.innerHTML}\`)}`;
+  element.replaceWith(litRepeat);
 }
