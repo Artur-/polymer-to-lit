@@ -174,8 +174,8 @@ const removeIncludingTrailingComma = (node) => {
   // Fixme trailing ,
 };
 const rewriteTextNode = (node, resolver) => {
-  const bindingRe = /\[\[(.+)\]\]/g;
-  const bindingRe2 = /\{\{(.+)\}\}/g;
+  const bindingRe = /\[\[(.+?)\]\]/g;
+  const bindingRe2 = /\{\{(.+?)\}\}/g;
 
   var result = node.rawText;
   result = result.replace(bindingRe, (_fullMatch, variableName) => {
