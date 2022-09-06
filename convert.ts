@@ -390,6 +390,9 @@ function removeImport(node: any, ...identifiers: string[]) {
       remove.push(specifier);
     }
   });
+  if (remove.length === 0) {
+    return;
+  }
   if (remove.length === node.specifiers.length) {
     // Remove all
     tsOutput.remove(node.start, node.end);

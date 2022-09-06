@@ -1,4 +1,5 @@
 import { html, LitElement, css } from "lit";
+
 import "@vaadin/vaadin-vertical-layout";
 
 class DomIfTest extends LitElement {
