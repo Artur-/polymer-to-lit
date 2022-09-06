@@ -2,14 +2,20 @@ import * as fs from "fs";
 // const process = require("process");
 import * as acorn from "acorn";
 import * as walk from "acorn-walk";
-const htmlParse = require("node-html-parser").parse;
-import * as prettier from "prettier";
 import MagicString from "magic-string";
+import * as prettier from "prettier";
+const htmlParse = require("node-html-parser").parse;
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const jsInputFile = process.argv[2];
-const tsOutputFile = jsInputFile.replace(".js", ".out.js");
+let tsOutputFile;
+if (process.argv[3] === "-o") {
+  tsOutputFile = jsInputFile;
+} else {
+  tsOutputFile = jsInputFile.replace(".js", ".out.js");
+}
+
 const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
