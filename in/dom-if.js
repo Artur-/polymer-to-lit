@@ -1,4 +1,5 @@
 import { html, PolymerElement } from "@polymer/polymer/polymer-element.js";
+import '@polymer/polymer/lib/elements/dom-if.js';
 import "@vaadin/vaadin-vertical-layout";
 
 class DomIfTest extends PolymerElement {

@@ -329,6 +329,7 @@ for (const node of body) {
     modifyClass(node);
   } else if (node.type === "ImportDeclaration") {
     removeImport(node, "html", "PolymerElement");
+    removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
   } else if (!getSource(node).includes("customElements.define")) {
     console.log("WARNING: Unhandled root node", node.type, getSource(node));
   }
@@ -383,10 +384,15 @@ function prependWithThis(expression: string) {
 console.log();
 console.log("------------");
 fs.writeFileSync(tsOutputFile, tsOutput.toString());
-function removeImport(node: any, ...identifiers: string[]) {
+function removeImport(node: any, ...identifiersOrFrom: string[]) {
   const remove: any[] = [];
+  if (identifiersOrFrom.includes(node.source.value)) {
+    tsOutput.remove(node.start, node.end);
+    return;
+  }
   node.specifiers.forEach((specifier) => {
-    if (identifiers.includes(specifier?.imported?.name)) {
+
+    if (identifiersOrFrom.includes(specifier?.imported?.name)) {
       remove.push(specifier);
     }
   });
