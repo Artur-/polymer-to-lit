@@ -32,7 +32,6 @@ const modifyClass = (node: any) => {
   if (parentClass.name !== "PolymerElement") {
     return;
   }
-  // console.log(getSource(node.body));
   newMethodInjectPosition = node.body.end - 1;
 
   // extends PolymerElement -> extends LitElement
@@ -500,7 +499,8 @@ function thisResolver(expression: string) {
 
 console.log();
 console.log("------------");
-fs.writeFileSync(tsOutputFile, tsOutput.toString());
+const prettified = prettier.format(tsOutput.toString(), { parser: "typescript" });
+fs.writeFileSync(tsOutputFile, prettified);
 function removeImport(node: any, ...identifiersOrFrom: string[]) {
   const remove: any[] = [];
   if (identifiersOrFrom.includes(node.source.value)) {
