@@ -549,7 +549,7 @@ function thisResolver(expression: string) {
   const expr = acorn.parse(expression);
   walk.simple(expr, {
     Identifier(node: any) {
-      s.overwrite(node.start, node.end, "this." + node.name);
+      s.overwrite(node.start, node.end, "this." + nullSafe(node.name));
       // console.log('Identifier',node);
     },
   });
@@ -557,7 +557,10 @@ function thisResolver(expression: string) {
 }
 
 let output = tsOutput.toString();
-output = output.replace(/this.\$.([^;., ()]*)/g, `this.renderRoot.querySelector("#$1")`);
+output = output.replace(
+  /this.\$.([^;., ()]*)/g,
+  `this.renderRoot.querySelector("#$1")`
+);
 const prettified = prettier.format(output, {
   parser: "typescript",
 });
@@ -628,7 +631,7 @@ function replaceWithLitRepeat(
       }
       if (expression.startsWith("item.")) {
         // This is the loop variable
-        return expression;
+        return nullSafe(expression);
       }
 
       return resolver(expression);
@@ -638,4 +641,8 @@ function replaceWithLitRepeat(
   const litRepeat = `\${${litExpression}.map(
     (item, index) => html\`${template.innerHTML}\`)}`;
   element.replaceWith(litRepeat);
+}
+function nullSafe(name: any) {
+  // Polymer allows using "a.b.c" when "a" or "b" is undefined
+  return name.replace(/\./g, "?.");
 }
