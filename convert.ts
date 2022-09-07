@@ -15,6 +15,7 @@ if (process.argv[3] === "-o") {
 } else {
   tsOutputFile = jsInputFile.replace(".js", ".out.js");
 }
+const useOptionalChaining = false;
 
 const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
@@ -29,6 +30,15 @@ let usesHeaderRenderer = false;
 let usesBodyRenderer = false;
 let usesFooterRenderer = false;
 
+function error(message?: any, ...optionalParams: any[]) {
+  console.error("ERROR", message, optionalParams);
+}
+function warn(message?: any, ...optionalParams: any[]) {
+  console.warn("WARNING", message, optionalParams);
+}
+function debug(message?: any, ...optionalParams: any[]) {
+  console.log(message, optionalParams);
+}
 const body = (polymerJs as any).body;
 const modifyClass = (node: any) => {
   const className = node.id.name;
@@ -75,7 +85,7 @@ const modifyClass = (node: any) => {
       classContent.key.name == "is"
     ) {
       tag = classContent.value.body.body[0].argument.value;
-      // console.log(getSource(classContent));
+      // debug(getSource(classContent));
     } else if (
       classContent.type == "MethodDefinition" &&
       classContent.key.name == "_attachDom"
@@ -96,7 +106,7 @@ const modifyClass = (node: any) => {
     ) {
       // There is no 'ready' callback but it is approximately run at the same time as 'firstUpdated'
       // tsOutput.overwrite(classContent.key.start, classContent.key.end, "firstUpdated");
-      // console.log(classContent);
+      // debug(classContent);
       const src = getSource(classContent);
       tsOutput.overwrite(
         classContent.start,
@@ -117,7 +127,7 @@ const modifyClass = (node: any) => {
         const returnStatment = classContent.value.body.body;
 
         returnStatment[0].argument.properties.forEach((prop) => {
-          // console.log(prop);
+          // debug(prop);
           const propName = prop.key.name;
 
           if (prop.value.type === "Identifier") {
@@ -153,7 +163,7 @@ const modifyClass = (node: any) => {
                       value: getSource(valueNode),
                     });
                   } else {
-                    console.log(
+                    warn(
                       "UNKNOWN type of 'value' for property",
                       propName,
                       ":",
@@ -195,7 +205,7 @@ const modifyClass = (node: any) => {
       const constructorNode = classContent;
       valueInitPosition = constructorNode.value.body.end - 1;
     } else {
-      // console.log("Unhandled class content", classContent);
+      // warn("Unhandled class content", classContent);
     }
     // TODO handle properties
     // static get properties() {
@@ -220,7 +230,7 @@ const modifyClass = (node: any) => {
     // or
     // @property({ type: Boolean })
     // myProperty = false;
-    // console.log(getSource(classContent));
+    // debug(getSource(classContent));
   }
   return { className, parentClass, template, tag };
 };
@@ -231,7 +241,7 @@ const removeIncludingTrailingComma = (node) => {
   } else {
     tsOutput.remove(node.start, node.end);
   }
-  // console.log(
+  // debug(
   //   getSource(node),
   //   "and then",
   //   jsContents.substring(node.end, node.end + 1+5)
@@ -323,7 +333,7 @@ const rewriteElement = (element: any, resolver: Resolver) => {
       bodyTemplate.childNodes.forEach((child) =>
         rewriteHtmlNode(child, (expression) => {
           if (expression.startsWith("item.")) {
-            return expression;
+            return nullSafe(expression);
           }
 
           return resolver(expression);
@@ -375,7 +385,7 @@ const rewriteElement = (element: any, resolver: Resolver) => {
         const expression = value.substring(2, value.length - 2);
         if (key.endsWith("$")) {
           // attribute binding prop$="[[foo]]" => prop=${this.foo}
-          // console.log("Rewrite attr: ", key, value);
+          // debug("Rewrite attr: ", key, value);
           element.setAttribute(
             key.replace("$", ""),
             "${" + resolver(expression) + "}"
@@ -384,7 +394,7 @@ const rewriteElement = (element: any, resolver: Resolver) => {
         } else {
           // property binding prop="[[foo]]" => .prop=${this.foo}
           // prop="[[!and(property1, property2)]]" => .prop=${!this.and(this.property1, this.property2)}
-          // console.log("Rewrite prop: ", key, value);
+          // debug("Rewrite prop: ", key, value);
           element.setAttribute("." + key, "${" + resolver(expression) + "}");
           element.removeAttribute(key);
         }
@@ -418,12 +428,12 @@ const modifyTemplate = (inputHtml) => {
     pre: true,
     comment: true,
   });
-  // console.log(root.innerHTML);
+  // debug(root.innerHTML);
   const htmls: string[] = [];
   const styles: string[] = [];
   const styleIncludes: string[] = [];
   for (const child of root.childNodes) {
-    // console.log(child);
+    // debug(child);
     if (child.tagName == "CUSTOM-STYLE" || child.tagName == "STYLE") {
       let style;
       if (child.tagName == "CUSTOM-STYLE") {
@@ -455,7 +465,7 @@ const modifyTemplate = (inputHtml) => {
   htmls.push(root.innerHTML);
 
   const ret = { htmls, styles, styleIncludes };
-  //console.log(ret);
+  //debug(ret);
   return ret;
 };
 
@@ -474,7 +484,7 @@ for (const node of body) {
     removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
     removeImport(node, "@polymer/polymer/lib/elements/dom-repeat.js");
   } else if (!getSource(node).includes("customElements.define")) {
-    console.log("WARNING: Unhandled root node", node.type, getSource(node));
+    warn("Unhandled root node", node.type, getSource(node));
   }
 }
 
@@ -545,15 +555,21 @@ if (computedPropertiesCode.length != 0) {
 }
 
 function thisResolver(expression: string) {
+  // debug("Resolve", expression);
   const s = new MagicString(expression);
-  const expr = acorn.parse(expression);
-  walk.simple(expr, {
-    Identifier(node: any) {
-      s.overwrite(node.start, node.end, "this." + nullSafe(node.name));
-      // console.log('Identifier',node);
-    },
-  });
-  return s.toString();
+  const expr: any = (acorn.parse(expression) as any).body[0];
+  if (expr.type === "ExpressionStatement") {
+    if (expr.expression.type === "MemberExpression") {
+      const result = expression.substring(
+        expr.expression.start,
+        expr.expression.end
+      );
+      return nullSafe(result);
+    }
+  }
+
+  warn("Unresolved expression", expression);
+  return expression;
 }
 
 let output = tsOutput.toString();
@@ -583,7 +599,7 @@ function removeImport(node: any, ...identifiersOrFrom: string[]) {
     // Remove all
     tsOutput.remove(node.start, node.end);
   } else {
-    console.log("ERROR: Unable to remove only part of an import");
+    error("Unable to remove only part of an import");
     //FIXME Broken
     remove.forEach((specifier) => removeIncludingTrailingComma(specifier));
   }
@@ -594,7 +610,7 @@ function rewriteHtmlNode(child: any, resolver: Resolver) {
   } else if (child.nodeType === 3) {
     rewriteTextNode(child, resolver);
   } else {
-    console.log("unhandled child", child);
+    warn("unhandled child", child);
   }
 }
 function replaceWithLitIf(
@@ -644,5 +660,41 @@ function replaceWithLitRepeat(
 }
 function nullSafe(name: any) {
   // Polymer allows using "a.b.c" when "a" or "b" is undefined
-  return name.replace(/\./g, "?.");
+  // webpack 4 does not support ?. so to be compati
+  if (useOptionalChaining) {
+    return name.replace(/\./g, "?.");
+  } else {
+    // this.a -> this.a
+    // this.a.b -> (this.a) ? this.a.b : undefined
+    // this.a.b.c -> (this.a && this.a.b) ? this.a.b.c : undefined
+    // item.foo -> (item) ? item.foo
+    // item.foo.bar -> (item && item.foo) ? item.foo.bar : undefined
+
+    // debug("nullSafe", name);
+
+    const parts = name.split(".");
+
+    let condition = "";
+    for (var i = 1; i < parts.length; i++) {
+      let subParts = parts[0];
+      for (var j = 1; j < i; j++) {
+        subParts += "." + parts[j];
+      }
+
+      if (condition !== "") {
+        condition += " && ";
+      }
+
+      if (subParts !== "this") {
+        condition += subParts;
+      }
+    }
+    if (condition) {
+      const ret = `(${condition}) ? ${name} : undefined`;
+      // debug(ret);
+      return ret;
+    } else {
+      return name;
+    }
+  }
 }
