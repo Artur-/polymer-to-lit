@@ -614,7 +614,6 @@ function replaceWithLitRepeat(
   resolver: Resolver,
   template: any
 ) {
-  usesRepeat = true;
   const expression = polymerItemsExpression.substring(
     2,
     polymerItemsExpression.length - 2
