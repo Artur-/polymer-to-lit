@@ -514,7 +514,9 @@ const observedPropertiesCode = observedProperties
     return `set ${variable}(newValue) {
       const oldValue = this.${variable};
       this._${variable} = newValue;
-      this.${observer}(newValue, oldValue);
+      if (oldValue !== newValue) {
+        this.${observer}(newValue, oldValue);
+      }
     }
     get ${variable}() {
       return this._${variable};
