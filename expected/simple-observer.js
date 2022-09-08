@@ -38,7 +38,9 @@ class SimpleObserver extends LitElement {
   set first(newValue) {
     const oldValue = this.first;
     this._first = newValue;
-    this._firstChanged(newValue, oldValue);
+    if (oldValue !== newValue) {
+      this._firstChanged(newValue, oldValue);
+    }
   }
   get first() {
     return this._first;
@@ -47,7 +49,9 @@ class SimpleObserver extends LitElement {
   set last(newValue) {
     const oldValue = this.last;
     this._last = newValue;
-    this._lastChanged(newValue, oldValue);
+    if (oldValue !== newValue) {
+      this._lastChanged(newValue, oldValue);
+    }
   }
   get last() {
     return this._last;

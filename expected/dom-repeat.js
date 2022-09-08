@@ -1,4 +1,3 @@
-import { repeat } from "lit/directives/repeat.js";
 import { html, LitElement, css } from "lit";
 
 import "@vaadin/vaadin-vertical-layout";

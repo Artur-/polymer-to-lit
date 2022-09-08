@@ -4,7 +4,10 @@ import * as acorn from "acorn";
 import * as walk from "acorn-walk";
 import MagicString from "magic-string";
 import * as prettier from "prettier";
+import { inspect } from "util";
+import { resolve } from "path";
 const htmlParse = require("node-html-parser").parse;
+const util = require("util");
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
@@ -40,7 +43,7 @@ function debug(message?: any, ...optionalParams: any[]) {
   console.log(message, optionalParams);
 }
 const body = (polymerJs as any).body;
-const modifyClass = (node: any) => {
+const modifyClass = (node: any, resolve: Resolver) => {
   const className = node.id.name;
   const parentClass = node.superClass;
   let tag = "";
@@ -174,7 +177,7 @@ const modifyClass = (node: any) => {
                 } else if (keyNode.name === "computed") {
                   computedProperties.push({
                     name: propName,
-                    value: thisResolver(valueNode.value),
+                    value: resolveExpression(valueNode.value, true, resolve),
                   });
                   removeIncludingTrailingComma(typeValue);
                 } else if (keyNode.name === "observer") {
@@ -257,17 +260,22 @@ const rewriteTextNode = (node, resolver) => {
 
   var result = node.rawText;
   result = result.replace(bindingRe, (_fullMatch, variableName) => {
-    const resolved = resolver(variableName);
+    const resolved = resolveExpression(variableName, true, resolver);
     return `\${${resolved}}`;
   });
   result = result.replace(bindingRe2, (_fullMatch, variableName) => {
-    const resolved = resolver(variableName);
+    const resolved = resolveExpression(variableName, true, resolver);
     return `\${${resolved}}`;
   });
   node.rawText = result;
 };
 
-type Resolver = (expression: string) => string;
+type Resolver = (
+  originalExpression: string,
+  node: any,
+  makeNullSafe: boolean,
+  resolver: Resolver
+) => string;
 
 const rewriteElement = (element: any, resolver: Resolver) => {
   if (
@@ -330,14 +338,23 @@ const rewriteElement = (element: any, resolver: Resolver) => {
     }
     if (bodyTemplate) {
       usesBodyRenderer = true;
-      bodyTemplate.childNodes.forEach((child) =>
-        rewriteHtmlNode(child, (expression) => {
-          if (expression.startsWith("item.")) {
-            return nullSafe(expression);
-          }
+      const itemResolver = (
+        originalExpression,
+        expr,
+        makeNullSafe,
+        resolver
+      ) => {
+        //FIXME
+        if (originalExpression.startsWith("item.")) {
+          return makeNullSafe
+            ? nullSafe(originalExpression, "item", "this")
+            : originalExpression;
+        }
 
-          return resolver(expression);
-        })
+        return resolver(originalExpression, expr, true, itemResolver);
+      };
+      bodyTemplate.childNodes.forEach((child) =>
+        rewriteHtmlNode(child, itemResolver)
       );
 
       element.setAttribute(
@@ -388,14 +405,17 @@ const rewriteElement = (element: any, resolver: Resolver) => {
           // debug("Rewrite attr: ", key, value);
           element.setAttribute(
             key.replace("$", ""),
-            "${" + resolver(expression) + "}"
+            "${" + resolveExpression(expression, true, resolver) + "}"
           );
           element.removeAttribute(key);
         } else {
           // property binding prop="[[foo]]" => .prop=${this.foo}
           // prop="[[!and(property1, property2)]]" => .prop=${!this.and(this.property1, this.property2)}
           // debug("Rewrite prop: ", key, value);
-          element.setAttribute("." + key, "${" + resolver(expression) + "}");
+          element.setAttribute(
+            "." + key,
+            "${" + resolveExpression(expression, true, resolver) + "}"
+          );
           element.removeAttribute(key);
         }
 
@@ -403,8 +423,10 @@ const rewriteElement = (element: any, resolver: Resolver) => {
           // @value-change=${(e) => (this.name = e.target.value)}
           const eventName = key + "-changed";
           const attributeKey = "@" + eventName;
-          const attributeValue = `\${(e) => (${resolver(
-            expression
+          const attributeValue = `\${(e) => (${resolveExpression(
+            expression,
+            false,
+            resolver
           )} = e.target.value)}`;
           element.setAttribute(attributeKey, attributeValue);
         }
@@ -478,7 +500,7 @@ const skipImports = [
 ];
 for (const node of body) {
   if (node.type === "ClassDeclaration") {
-    modifyClass(node);
+    modifyClass(node, thisResolver);
   } else if (node.type === "ImportDeclaration") {
     removeImport(node, "html", "PolymerElement");
     removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
@@ -554,22 +576,66 @@ if (computedPropertiesCode.length != 0) {
   tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
 }
 
-function thisResolver(expression: string) {
-  // debug("Resolve", expression);
+function resolveExpression(
+  expression: string,
+  makeNullSafe: boolean,
+  resolver: Resolver
+) {
   const s = new MagicString(expression);
   const expr: any = (acorn.parse(expression) as any).body[0];
-  if (expr.type === "ExpressionStatement") {
-    if (expr.expression.type === "MemberExpression") {
-      const result = expression.substring(
-        expr.expression.start,
-        expr.expression.end
-      );
-      return nullSafe(result);
-    }
-  }
+  // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
 
-  warn("Unresolved expression", expression);
-  return expression;
+  // walk.simple(expr, {
+  //   ExpressionStatement(node: any) {
+  //     debug("ExprsessionStatement", node);
+  //   },
+  //   Identifier(node: any) {
+  //     debug("Identifier", node);
+  //     s.overwrite(node.start, node.end, nullSafe("this." + node.name));
+  //     return false;
+  //   },
+  // });
+  return resolver(expression, expr, makeNullSafe, resolver);
+}
+function thisResolver(
+  originalExpression: string,
+  expr: any,
+  makeNullSafe: boolean,
+  resolve: Resolver
+) {
+  // debug("thisResolver",expr)
+  if (expr.type === "ExpressionStatement") {
+    return resolve(originalExpression, expr.expression, makeNullSafe, resolve);
+  } else if (expr.type === "MemberExpression") {
+    const result = "this." + originalExpression.substring(expr.start, expr.end);
+
+    return makeNullSafe ? nullSafe(result, "this") : result;
+  } else if (expr.type === "Identifier") {
+    const result = "this." + expr.name;
+    return makeNullSafe ? nullSafe(result, "this") : result;
+  } else if (expr.type === "UnaryExpression") {
+    return (
+      expr.operator +
+      "(" +
+      resolve(originalExpression, expr.argument, makeNullSafe, resolve) +
+      ")"
+    );
+  } else if (expr.type === "CallExpression") {
+    const args = expr.arguments
+      .map((argument) =>
+        resolve(originalExpression, argument, makeNullSafe, resolve)
+      )
+      .join(", ");
+    return (
+      resolve(originalExpression, expr.callee, makeNullSafe, resolve) +
+      "(" +
+      args +
+      ")"
+    );
+  }
+  // debug(expr);
+  warn("Unresolved expression", expr);
+  return originalExpression.substring(expr.start, expr.end);
 }
 
 let output = tsOutput.toString();
@@ -624,7 +690,7 @@ function replaceWithLitIf(
     polymerExpression.length - 2
   );
 
-  const litExpression = resolver(expression);
+  const litExpression = resolveExpression(expression, true, resolver);
   template.childNodes.forEach((child) => rewriteElement(child, resolver));
   const litIf = `\${${litExpression} ? html\`${template.innerHTML}\` : html\`\`}`;
   element.replaceWith(litIf);
@@ -639,29 +705,62 @@ function replaceWithLitRepeat(
     2,
     polymerItemsExpression.length - 2
   );
-  const litExpression = resolver(expression);
-  template.childNodes.forEach((child) =>
-    rewriteElement(child, (expression) => {
-      if (expression === "index") {
-        return "index";
-      }
-      if (expression.startsWith("item.")) {
-        // This is the loop variable
-        return nullSafe(expression);
-      }
 
-      return resolver(expression);
-    })
-  );
+  const litExpression = resolveExpression(expression, true, resolver);
+
+  const itemResolver = (
+    originalExpression: string,
+    node: any,
+    makeNullSafe: boolean,
+    itemResolver: Resolver
+  ) => {
+    if (originalExpression === "index") {
+      return "index";
+    }
+    if (node.type === "MemberExpression" && node.object.name === "item") {
+      // const ret = resolver(
+      //   originalExpression,
+      //   node,
+      //   makeNullSafe,
+      //   itemResolver
+      // );
+      const ret = resolver(
+        originalExpression,
+        node.property,
+        makeNullSafe,
+        itemResolver
+      );
+
+      const result = ret.replace(/this\./g, "item.");
+      // debug(result);
+      // console.log("ret2", ret2);
+      return result;
+    }
+    // if (expression.startsWith("item.")) {
+    //   // This is the loop variable
+    //   return nullSafe(expression);
+    // }
+
+    return resolver(originalExpression, node, makeNullSafe, itemResolver);
+  };
+
+  template.childNodes.forEach((child) => rewriteElement(child, itemResolver));
 
   const litRepeat = `\${${litExpression}.map(
     (item, index) => html\`${template.innerHTML}\`)}`;
   element.replaceWith(litRepeat);
 }
-function nullSafe(name: any) {
+function nullSafe(name: any, ...assumedNonNull: string[]) {
+  // debug("nullSafe", name);
   // Polymer allows using "a.b.c" when "a" or "b" is undefined
   // webpack 4 does not support ?. so to be compati
   if (useOptionalChaining) {
+    const first = name.split(".")[0];
+    if (assumedNonNull.includes(first)) {
+      return (
+        first + "." + name.substring(first.length + 1).replace(/\./g, "?.")
+      );
+    }
     return name.replace(/\./g, "?.");
   } else {
     // this.a -> this.a
@@ -676,17 +775,18 @@ function nullSafe(name: any) {
 
     let condition = "";
     for (var i = 1; i < parts.length; i++) {
-      let subParts = parts[0];
+      let accessor = parts[0];
+
       for (var j = 1; j < i; j++) {
-        subParts += "." + parts[j];
+        accessor += "." + parts[j];
       }
 
       if (condition !== "") {
         condition += " && ";
       }
 
-      if (subParts !== "this") {
-        condition += subParts;
+      if (!assumedNonNull.includes(accessor)) {
+        condition += accessor;
       }
     }
     if (condition) {
