@@ -412,8 +412,12 @@ const rewriteElement = (element: any, resolver: Resolver) => {
         if (key.endsWith("$")) {
           // attribute binding prop$="[[foo]]" => prop=${this.foo}
           // debug("Rewrite attr: ", key, value);
+          let attributeKey = key.replace("$", "");
+          if (attributeKey === "hidden") {
+            attributeKey = "?" + attributeKey;
+          }
           element.setAttribute(
-            key.replace("$", ""),
+            attributeKey,
             "${" + resolveExpression(expression, true, resolver) + "}"
           );
           element.removeAttribute(key);
