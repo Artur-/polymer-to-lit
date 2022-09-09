@@ -254,7 +254,7 @@ const removeIncludingTrailingComma = (node) => {
   // }
   // Fixme trailing ,
 };
-const rewriteTextNode = (node, resolver) => {
+const rewriteTextNode = (node, resolver: Resolver) => {
   const bindingRe = /\[\[(.+?)\]\]/g;
   const bindingRe2 = /\{\{(.+?)\}\}/g;
 
@@ -275,7 +275,8 @@ type Resolver = (
   node: any,
   makeNullSafe: boolean,
   resolver: Resolver,
-  undefinedValue: string
+  undefinedValue: string,
+  qualifiedPrefixes: string[]
 ) => string;
 
 const rewriteElement = (element: any, resolver: Resolver) => {
@@ -357,7 +358,8 @@ const rewriteElement = (element: any, resolver: Resolver) => {
           expr,
           true,
           itemResolver,
-          undefinedValue
+          undefinedValue,
+          ["this"]
         );
       };
       bodyTemplate.childNodes.forEach((child) =>
@@ -478,7 +480,7 @@ const modifyTemplate = (inputHtml) => {
       styles.push(css);
       child.remove();
     } else {
-      rewriteHtmlNode(child, thisResolver);
+      rewriteHtmlNode(child, baseResolver);
       // if (child.nodeType === 1) {
       //   htmls.push(child.outerHTML);
       // } else {
@@ -504,7 +506,7 @@ const skipImports = [
 ];
 for (const node of body) {
   if (node.type === "ClassDeclaration") {
-    modifyClass(node, thisResolver);
+    modifyClass(node, baseResolver);
   } else if (node.type === "ImportDeclaration") {
     removeImport(node, "html", "PolymerElement");
     removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
@@ -588,7 +590,8 @@ function resolveExpression(
   expression: string,
   makeNullSafe: boolean,
   resolver: Resolver,
-  undefinedValue: string = "undefined"
+  undefinedValue: string = "undefined",
+  qualifiedPrefixes: string[] = ["this"]
 ) {
   const s = new MagicString(expression);
   const expr: any = (acorn.parse(expression) as any).body[0];
@@ -604,14 +607,22 @@ function resolveExpression(
   //     return false;
   //   },
   // });
-  return resolver(expression, expr, makeNullSafe, resolver, undefinedValue);
+  return resolver(
+    expression,
+    expr,
+    makeNullSafe,
+    resolver,
+    undefinedValue,
+    qualifiedPrefixes
+  );
 }
-function thisResolver(
+function baseResolver(
   originalExpression: string,
   expr: any,
   makeNullSafe: boolean,
   resolve: Resolver,
-  undefinedValue: string
+  undefinedValue: string,
+  qualifiedPrefixes: string[]
 ) {
   // debug("thisResolver", expr.type);
   if (expr.type === "ExpressionStatement") {
@@ -620,17 +631,25 @@ function thisResolver(
       expr.expression,
       makeNullSafe,
       resolve,
-      undefinedValue
+      undefinedValue,
+      qualifiedPrefixes
     );
   } else if (expr.type === "MemberExpression") {
-    const result = "this." + originalExpression.substring(expr.start, expr.end);
+    const result = prependThisIfNeeded(
+      qualifiedPrefixes,
+      originalExpression.substring(expr.start, expr.end)
+    );
 
-    return makeNullSafe ? nullSafe(result, ["this"], undefinedValue) : result;
+    return makeNullSafe
+      ? nullSafe(result, qualifiedPrefixes, undefinedValue)
+      : result;
   } else if (expr.type === "Literal") {
     return expr.raw;
   } else if (expr.type === "Identifier") {
-    const result = "this." + expr.name;
-    return makeNullSafe ? nullSafe(result, ["this"], undefinedValue) : result;
+    const result = prependThisIfNeeded(qualifiedPrefixes, expr.name);
+    return makeNullSafe
+      ? nullSafe(result, qualifiedPrefixes, undefinedValue)
+      : result;
   } else if (expr.type === "UnaryExpression") {
     return (
       expr.operator +
@@ -640,7 +659,8 @@ function thisResolver(
         expr.argument,
         makeNullSafe,
         resolve,
-        undefinedValue
+        undefinedValue,
+        qualifiedPrefixes
       ) +
       ")"
     );
@@ -652,7 +672,8 @@ function thisResolver(
           argument,
           makeNullSafe,
           resolve,
-          undefinedValue
+          undefinedValue,
+          qualifiedPrefixes
         )
       )
       .join(", ");
@@ -661,7 +682,8 @@ function thisResolver(
       expr.callee,
       makeNullSafe,
       resolve,
-      undefinedValue
+      undefinedValue,
+      qualifiedPrefixes
     );
     const retval = "(" + caller + ")(" + args + ")";
     // debug("Caller", caller);
@@ -735,7 +757,7 @@ function replaceWithLitIf(
 function replaceWithLitRepeat(
   element: any,
   polymerItemsExpression: string,
-  resolver: Resolver,
+  outerResolver: Resolver,
   template: any
 ) {
   const expression = polymerItemsExpression.substring(
@@ -744,50 +766,29 @@ function replaceWithLitRepeat(
   );
 
   // debug("expression", expression);
-  const litExpression = resolveExpression(expression, true, resolver, "[]");
+  const litExpression = resolveExpression(
+    expression,
+    true,
+    outerResolver,
+    "[]"
+  );
   // debug("litExpression", litExpression);
 
   const itemResolver = (
     originalExpression: string,
     node: any,
     makeNullSafe: boolean,
-    itemResolver: Resolver,
-    undefinedValue: string
+    resolver: Resolver,
+    undefinedValue: string,
+    qualifiedPrefixes
   ) => {
-    if (originalExpression === "index") {
-      return "index";
-    }
-    if (node.type === "MemberExpression" && node.object.name === "item") {
-      // const ret = resolver(
-      //   originalExpression,
-      //   node,
-      //   makeNullSafe,
-      //   itemResolver
-      // );
-      const ret = resolver(
-        originalExpression,
-        node.property,
-        makeNullSafe,
-        itemResolver,
-        undefinedValue
-      );
-
-      const result = ret.replace(/this\./g, "item.");
-      // debug(result);
-      // console.log("ret2", ret2);
-      return result;
-    }
-    // if (expression.startsWith("item.")) {
-    //   // This is the loop variable
-    //   return nullSafe(expression);
-    // }
-
     return resolver(
       originalExpression,
       node,
       makeNullSafe,
-      itemResolver,
-      undefinedValue
+      outerResolver,
+      undefinedValue,
+      [...qualifiedPrefixes, "item", "index"]
     );
   };
 
@@ -850,4 +851,11 @@ function nullSafe(name: any, assumedNonNull: string[], undefinedValue: string) {
       return name;
     }
   }
+}
+function prependThisIfNeeded(qualifiedPrefixes: string[], variable: string) {
+  const parts = variable.split(/\./);
+  if (qualifiedPrefixes.includes(parts[0])) {
+    return variable;
+  }
+  return "this." + variable;
 }
