@@ -274,7 +274,8 @@ type Resolver = (
   originalExpression: string,
   node: any,
   makeNullSafe: boolean,
-  resolver: Resolver
+  resolver: Resolver,
+  undefinedValue: string
 ) => string;
 
 const rewriteElement = (element: any, resolver: Resolver) => {
@@ -338,20 +339,26 @@ const rewriteElement = (element: any, resolver: Resolver) => {
     }
     if (bodyTemplate) {
       usesBodyRenderer = true;
-      const itemResolver = (
+      const itemResolver: Resolver = (
         originalExpression,
         expr,
         makeNullSafe,
-        resolver
+        resolver,
+        undefinedValue
       ) => {
-        //FIXME
         if (originalExpression.startsWith("item.")) {
           return makeNullSafe
-            ? nullSafe(originalExpression, "item", "this")
+            ? nullSafe(originalExpression, ["item", "this"], undefinedValue)
             : originalExpression;
         }
 
-        return resolver(originalExpression, expr, true, itemResolver);
+        return resolver(
+          originalExpression,
+          expr,
+          true,
+          itemResolver,
+          undefinedValue
+        );
       };
       bodyTemplate.childNodes.forEach((child) =>
         rewriteHtmlNode(child, itemResolver)
@@ -580,7 +587,8 @@ if (computedPropertiesCode.length != 0) {
 function resolveExpression(
   expression: string,
   makeNullSafe: boolean,
-  resolver: Resolver
+  resolver: Resolver,
+  undefinedValue: string = "undefined"
 ) {
   const s = new MagicString(expression);
   const expr: any = (acorn.parse(expression) as any).body[0];
@@ -596,47 +604,74 @@ function resolveExpression(
   //     return false;
   //   },
   // });
-  return resolver(expression, expr, makeNullSafe, resolver);
+  return resolver(expression, expr, makeNullSafe, resolver, undefinedValue);
 }
 function thisResolver(
   originalExpression: string,
   expr: any,
   makeNullSafe: boolean,
-  resolve: Resolver
+  resolve: Resolver,
+  undefinedValue: string
 ) {
-  // debug("thisResolver",expr)
+  // debug("thisResolver", expr.type);
   if (expr.type === "ExpressionStatement") {
-    return resolve(originalExpression, expr.expression, makeNullSafe, resolve);
+    return resolve(
+      originalExpression,
+      expr.expression,
+      makeNullSafe,
+      resolve,
+      undefinedValue
+    );
   } else if (expr.type === "MemberExpression") {
     const result = "this." + originalExpression.substring(expr.start, expr.end);
 
-    return makeNullSafe ? nullSafe(result, "this") : result;
+    return makeNullSafe ? nullSafe(result, ["this"], undefinedValue) : result;
+  } else if (expr.type === "Literal") {
+    return expr.raw;
   } else if (expr.type === "Identifier") {
     const result = "this." + expr.name;
-    return makeNullSafe ? nullSafe(result, "this") : result;
+    return makeNullSafe ? nullSafe(result, ["this"], undefinedValue) : result;
   } else if (expr.type === "UnaryExpression") {
     return (
       expr.operator +
       "(" +
-      resolve(originalExpression, expr.argument, makeNullSafe, resolve) +
+      resolve(
+        originalExpression,
+        expr.argument,
+        makeNullSafe,
+        resolve,
+        undefinedValue
+      ) +
       ")"
     );
   } else if (expr.type === "CallExpression") {
     const args = expr.arguments
       .map((argument) =>
-        resolve(originalExpression, argument, makeNullSafe, resolve)
+        resolve(
+          originalExpression,
+          argument,
+          makeNullSafe,
+          resolve,
+          undefinedValue
+        )
       )
       .join(", ");
-    return (
-      resolve(originalExpression, expr.callee, makeNullSafe, resolve) +
-      "(" +
-      args +
-      ")"
+    const caller = resolve(
+      originalExpression,
+      expr.callee,
+      makeNullSafe,
+      resolve,
+      undefinedValue
     );
+    const retval = "(" + caller + ")(" + args + ")";
+    // debug("Caller", caller);
+    // debug("Call ret", retval);
+    return retval;
   }
   // debug(expr);
-  warn("Unresolved expression", expr);
-  return originalExpression.substring(expr.start, expr.end);
+  const retval = originalExpression.substring(expr.start, expr.end);
+  warn("Unresolved expression", expr, "returning", retval);
+  return retval;
 }
 
 let output = tsOutput.toString();
@@ -696,6 +731,7 @@ function replaceWithLitIf(
   const litIf = `\${${litExpression} ? html\`${template.innerHTML}\` : html\`\`}`;
   element.replaceWith(litIf);
 }
+
 function replaceWithLitRepeat(
   element: any,
   polymerItemsExpression: string,
@@ -707,13 +743,16 @@ function replaceWithLitRepeat(
     polymerItemsExpression.length - 2
   );
 
-  const litExpression = resolveExpression(expression, true, resolver);
+  // debug("expression", expression);
+  const litExpression = resolveExpression(expression, true, resolver, "[]");
+  // debug("litExpression", litExpression);
 
   const itemResolver = (
     originalExpression: string,
     node: any,
     makeNullSafe: boolean,
-    itemResolver: Resolver
+    itemResolver: Resolver,
+    undefinedValue: string
   ) => {
     if (originalExpression === "index") {
       return "index";
@@ -729,7 +768,8 @@ function replaceWithLitRepeat(
         originalExpression,
         node.property,
         makeNullSafe,
-        itemResolver
+        itemResolver,
+        undefinedValue
       );
 
       const result = ret.replace(/this\./g, "item.");
@@ -742,16 +782,21 @@ function replaceWithLitRepeat(
     //   return nullSafe(expression);
     // }
 
-    return resolver(originalExpression, node, makeNullSafe, itemResolver);
+    return resolver(
+      originalExpression,
+      node,
+      makeNullSafe,
+      itemResolver,
+      undefinedValue
+    );
   };
 
   template.childNodes.forEach((child) => rewriteElement(child, itemResolver));
 
-  const litRepeat = `\${${litExpression}.map(
-    (item, index) => html\`${template.innerHTML}\`)}`;
+  const litRepeat = `\${(${litExpression}).map((item, index) => html\`${template.innerHTML}\`)}`;
   element.replaceWith(litRepeat);
 }
-function nullSafe(name: any, ...assumedNonNull: string[]) {
+function nullSafe(name: any, assumedNonNull: string[], undefinedValue: string) {
   // debug("nullSafe", name);
   // Polymer allows using "a.b.c" when "a" or "b" is undefined
   // webpack 4 does not support ?. so to be compati
@@ -770,12 +815,19 @@ function nullSafe(name: any, ...assumedNonNull: string[]) {
     // item.foo -> (item) ? item.foo
     // item.foo.bar -> (item && item.foo) ? item.foo.bar : undefined
 
-    // debug("nullSafe", name);
+    // debug("nullSafe", name, 'using undef',undefinedValue);
 
     const parts = name.split(".");
 
     let condition = "";
-    for (var i = 1; i < parts.length; i++) {
+    let lastPart = parts.length - 1;
+    if (undefinedValue !== "undefined") {
+      // If using something else than undefined, we should check also the last part of the value and fall back if that is undefined
+      // e.g. item.list -> fallback if `list` is undefined
+      lastPart++;
+    }
+
+    for (var i = 1; i <= lastPart; i++) {
       let accessor = parts[0];
 
       for (var j = 1; j < i; j++) {
@@ -791,7 +843,7 @@ function nullSafe(name: any, ...assumedNonNull: string[]) {
       }
     }
     if (condition) {
-      const ret = `(${condition}) ? ${name} : undefined`;
+      const ret = `(${condition}) ? ${name} : ${undefinedValue}`;
       // debug(ret);
       return ret;
     } else {
