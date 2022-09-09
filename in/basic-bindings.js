@@ -6,6 +6,7 @@ class BasicBindings extends PolymerElement {
       <vaadin-vertical-layout id="buttons">
         <vaadin-button id="[[buttonId]]">[[buttonText]]</vaadin-button>
         <vaadin-text-field value="[[textfieldValue]]"></vaadin-text-field>
+        <div hidden$="[[noshow]]">Visible or not</div>
       </vaadin-vertical-layout>
     `;
   }

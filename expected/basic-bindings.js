@@ -6,7 +6,8 @@ class BasicBindings extends LitElement {
       <vaadin-vertical-layout id="buttons">
         <vaadin-button .id="${this.buttonId}">${this.buttonText}</vaadin-button>
         <vaadin-text-field .value="${this.textfieldValue}"></vaadin-text-field>
-      </vaadin-vertical-layout>
+        <div hidden="${this.noshow}">Visible or not</div>
+        </vaadin-vertical-layout>
     `;
   }
 
