@@ -19,7 +19,7 @@ if (process.argv[3] === "-o") {
   tsOutputFile = jsInputFile.replace(".js", ".out.js");
 }
 const useOptionalChaining = false;
-
+const useLit1 = false;
 const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
@@ -477,9 +477,6 @@ const modifyTemplate = (inputHtml) => {
       // } else {
       //   htmls.push(child.rawText);
       // }
-      // TODO rewrite dom-repeat
-      // TODO rewrite dom-if
-      // TODO rewrite dom-repeat
       // TODO  href="mailto:[[item.email]]"
       // TODO <template> tags
     }
@@ -510,7 +507,11 @@ for (const node of body) {
   }
 }
 
-tsOutput.prepend(`import { html, LitElement, css } from "lit";\n`);
+tsOutput.prepend(
+  `import { html, LitElement, css } from "${
+    useLit1 ? "lit-element" : "lit"
+  }";\n`
+);
 if (usesRepeat) {
   tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";\n`);
 }
