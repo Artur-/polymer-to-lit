@@ -9,6 +9,8 @@ import { resolve } from "path";
 const htmlParse = require("node-html-parser").parse;
 const util = require("util");
 
+const assumeBooleanAttributes = ["hidden", "checked"];
+
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const jsInputFile = process.argv[2];
@@ -413,9 +415,10 @@ const rewriteElement = (element: any, resolver: Resolver) => {
           // attribute binding prop$="[[foo]]" => prop=${this.foo}
           // debug("Rewrite attr: ", key, value);
           let attributeKey = key.replace("$", "");
-          if (attributeKey === "hidden") {
-            attributeKey = "?" + attributeKey;
-          }
+          if (assumeBooleanAttributes.includes(key))
+            if (attributeKey === "hidden") {
+              attributeKey = "?" + attributeKey;
+            }
           element.setAttribute(
             attributeKey,
             "${" + resolveExpression(expression, true, resolver) + "}"
