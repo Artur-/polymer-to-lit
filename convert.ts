@@ -37,6 +37,7 @@ let usesRepeat = false;
 let usesHeaderRenderer = false;
 let usesBodyRenderer = false;
 let usesFooterRenderer = false;
+let usesUnsafeCss = false;
 
 function error(message?: any, ...optionalParams: any[]) {
   console.error("ERROR", message, optionalParams);
@@ -73,10 +74,29 @@ const modifyClass = (node: any, resolve: Resolver) => {
 
       const html = modifiedTemplate.htmls.join("\n");
       // const css = modifiedTemplate.styles.join("\n"); //TODO
+      const hasStyleIncludes = modifiedTemplate.styleIncludes.length > 0;
       const hasStyles = modifiedTemplate.styles.length > 0;
+
+      if (hasStyleIncludes) {
+        usesUnsafeCss = true;
+      }
       const stylesGetter = `  static get styles() {
+        ${hasStyleIncludes ? `const includedStyles = {};` : ""}
+        ${modifiedTemplate.styleIncludes.map(
+          (include) =>
+            `includedStyles["${include}"] = ${nullSafe(
+              `document.querySelector(
+            "dom-module[id='${include}']"
+            ).firstElementChild.content.firstElementChild.innerText`,
+              ["document"],
+              '""'
+            )};`
+        )}
         return [
-          ${modifiedTemplate.styles.map((css) => `css\`${css}\``).join(",")}
+          ${modifiedTemplate.styleIncludes
+            .map((include) => `unsafeCSS(includedStyles["${include}"])`)
+            .join(", ")}${modifiedTemplate.styleIncludes.length > 0 ? "," : ""}
+        ${modifiedTemplate.styles.map((css) => `css\`${css}\``).join(",")}
         ];
       }`;
 
@@ -530,6 +550,9 @@ const litImport = useLit1 ? "lit-element" : "lit";
 tsOutput.prepend(`import { html, LitElement, css } from "${litImport}";\n`);
 if (usesRepeat) {
   tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";\n`);
+}
+if (usesUnsafeCss) {
+  tsOutput.prepend(`import { unsafeCSS } from "${litImport}";\n`);
 }
 
 const usedRenderers: string[] = [];
