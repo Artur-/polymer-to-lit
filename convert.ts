@@ -220,6 +220,14 @@ const modifyClass = (node: any, resolve: Resolver) => {
                     });
                     removeIncludingTrailingComma(typeValue);
                   }
+                } else if (keyNode.name === "reflectToAttribute") {
+                  removeIncludingTrailingComma(typeValue);
+                  if (
+                    valueNode.type === "Literal" &&
+                    valueNode.raw === "true"
+                  ) {
+                    tsOutput.prependLeft(typeValue.start, "reflect: true,");
+                  }
                 }
               }
             });
@@ -588,6 +596,7 @@ const observedPropertiesCode = observedProperties
       this._${variable} = newValue;
       if (oldValue !== newValue) {
         this.${observer}(newValue, oldValue);
+        this.requestUpdateInternal("${variable}", oldValue, this.constructor.properties.${variable});
       }
     }
     get ${variable}() {
