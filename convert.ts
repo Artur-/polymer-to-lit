@@ -736,8 +736,13 @@ function baseResolver(
 }
 
 let output = tsOutput.toString();
+// this.$['ordersGrid'] -> this.renderRoot.querySelector("#ordersGrid")
 output = output.replace(
-  /this.\$.([^;., ()]*)/g,
+  /this.\$\[['"]([^;., ()]*['"]\])/g,
+  `this.renderRoot.querySelector("#$1")`
+);
+output = output.replace(
+  /this\.\$\.([^;., ()]*)/g,
   `this.renderRoot.querySelector("#$1")`
 );
 const prettified = prettier.format(output, {
