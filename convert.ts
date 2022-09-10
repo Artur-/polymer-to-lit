@@ -15,13 +15,16 @@ const assumeBooleanAttributes = ["hidden", "checked"];
 
 const jsInputFile = process.argv[2];
 let tsOutputFile;
-if (process.argv[3] === "-o") {
+if (process.argv.includes("-o")) {
   tsOutputFile = jsInputFile;
 } else {
   tsOutputFile = jsInputFile.replace(".js", ".out.js");
 }
 const useOptionalChaining = false;
-const useLit1 = false;
+let useLit1 = false;
+if (process.argv.includes("-1")) {
+  useLit1 = true;
+}
 const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
 const tsOutput: MagicString = new MagicString(jsContents);
 const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
@@ -523,11 +526,8 @@ for (const node of body) {
   }
 }
 
-tsOutput.prepend(
-  `import { html, LitElement, css } from "${
-    useLit1 ? "lit-element" : "lit"
-  }";\n`
-);
+const litImport = useLit1 ? "lit-element" : "lit";
+tsOutput.prepend(`import { html, LitElement, css } from "${litImport}";\n`);
 if (usesRepeat) {
   tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";\n`);
 }
