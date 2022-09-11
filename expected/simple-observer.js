@@ -40,6 +40,11 @@ class SimpleObserver extends LitElement {
     this._first = newValue;
     if (oldValue !== newValue) {
       this._firstChanged(newValue, oldValue);
+      this.requestUpdateInternal(
+        "first",
+        oldValue,
+        this.constructor.properties.first
+      );
     }
   }
   get first() {
@@ -51,6 +56,11 @@ class SimpleObserver extends LitElement {
     this._last = newValue;
     if (oldValue !== newValue) {
       this._lastChanged(newValue, oldValue);
+      this.requestUpdateInternal(
+        "last",
+        oldValue,
+        this.constructor.properties.last
+      );
     }
   }
   get last() {

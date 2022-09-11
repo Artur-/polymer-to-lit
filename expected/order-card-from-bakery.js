@@ -1,3 +1,4 @@
+import { unsafeCSS } from "lit";
 import { html, LitElement, css } from "lit";
 
 import "../../../styles/shared-styles.js";
@@ -5,7 +6,22 @@ import "./order-status-badge.js";
 
 class OrderCard extends LitElement {
   static get styles() {
+    const includedStyles = {};
+    includedStyles["shared-styles"] =
+      document.querySelector("dom-module[id='shared-styles']") &&
+      document.querySelector("dom-module[id='shared-styles']")
+        .firstElementChild &&
+      document.querySelector("dom-module[id='shared-styles']").firstElementChild
+        .content &&
+      document.querySelector("dom-module[id='shared-styles']").firstElementChild
+        .content.firstElementChild &&
+      document.querySelector("dom-module[id='shared-styles']").firstElementChild
+        .content.firstElementChild.innerText
+        ? document.querySelector("dom-module[id='shared-styles']")
+            .firstElementChild.content.firstElementChild.innerText
+        : "";
     return [
+      unsafeCSS(includedStyles["shared-styles"]),
       css`
         :host {
           display: block;
