@@ -140,7 +140,7 @@ class OrderCard extends LitElement {
   render() {
     return html`
       <div class="content">
-        <div class="group-heading" hidden="${!this.header}">
+        <div class="group-heading" ?hidden="${!this.header}">
           <span class="main"
             >${this.header ? this.header.main : undefined}</span
           >
