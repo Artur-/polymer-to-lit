@@ -82,16 +82,18 @@ const modifyClass = (node: any, resolve: Resolver) => {
       }
       const stylesGetter = `  static get styles() {
         ${hasStyleIncludes ? `const includedStyles = {};` : ""}
-        ${modifiedTemplate.styleIncludes.map(
-          (include) =>
-            `includedStyles["${include}"] = ${nullSafe(
-              `document.querySelector(
+        ${modifiedTemplate.styleIncludes
+          .map(
+            (include) =>
+              `includedStyles["${include}"] = ${nullSafe(
+                `document.querySelector(
             "dom-module[id='${include}']"
             ).firstElementChild.content.firstElementChild.innerText`,
-              ["document"],
-              '""'
-            )};`
-        )}
+                ["document"],
+                '""'
+              )};`
+          )
+          .join("\n")}
         return [
           ${modifiedTemplate.styleIncludes
             .map((include) => `unsafeCSS(includedStyles["${include}"])`)
