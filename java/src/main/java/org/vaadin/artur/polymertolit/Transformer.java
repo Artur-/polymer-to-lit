@@ -52,13 +52,10 @@ public class Transformer {
         try {
             javaClass = Roaster.parse(JavaClassSource.class, source);
         } catch (org.jboss.forge.roaster.ParserException e) {
-            e.printStackTrace();
             return source;
         }
 
-        System.out.println("Parsed");
         String superType = javaClass.getSuperType();
-        System.out.println("Superype: " + superType);
         if (!superType.startsWith("PolymerTemplate")
                 && !superType.startsWith("com.vaadin.flow.component.polymertemplate.PolymerTemplate")) {
             return source;
@@ -68,7 +65,9 @@ public class Transformer {
         // System.out.println(javaClass.getNestedTypes());
         if (superType.contains("<")) {
             String modelType = superType.substring(superType.indexOf("<") + 1, superType.indexOf(">"));
-            transformModel(modelType, javaClass);
+            if (!modelType.equals("TemplateModel")) {
+                transformModel(modelType, javaClass);
+            }
         }
 
         javaClass.setSuperType("com.vaadin.flow.component.littemplate.LitTemplate");
@@ -133,7 +132,7 @@ public class Transformer {
                     body.append(sub.replace("@Override\n"));
                     body.append(sub.replace("public void ${methodName}(${type} ${property}) {\n"));
                     if (defaultValue == null) {
-                        body.append("// FIXME Implement this method which could not be automatically generated\n");
+                        body.append("/* FIXME Implement this method which could not be automatically generated*/\n");
                         // body.append("// The model method was defined as");
                     } else {
                         body.append(
@@ -157,7 +156,7 @@ public class Transformer {
                     body.append(sub.replace("@Override\n"));
                     body.append(sub.replace("public ${type} ${methodName}() {\n"));
                     if (defaultValue == null) {
-                        body.append("// FIXME Implement this method which could not be automatically generated\n");
+                        body.append("/* FIXME Implement this method which could not be automatically generated*/\n");
                         // body.append("// The model method was defined as");
                     } else {
                         body.append(
@@ -169,11 +168,13 @@ public class Transformer {
             }
 
             body.append("};");
+            // TODO For some reason, this strips comments
             getModelMethod.setBody(body.toString());
 
         } else {
             System.err.println(
-                    "Warning: Do not know how to handle external models. Only models which are internal interfaces");
+                    "Warning: Do not know how to handle external models. Only models which are internal interfaces: "
+                            + modelType);
         }
 
     }
