@@ -87,6 +87,7 @@ public class Transformer {
             // System.out.println("Sub: " + nested.isInterface());
             JavaInterfaceSource model = (JavaInterfaceSource) nested;
 
+            model.removeInterface("TemplateModel");
             LinkedHashSet<String> getters = new LinkedHashSet<>();
             LinkedHashSet<String> setters = new LinkedHashSet<>();
             LinkedHashMap<String, Type<?>> types = new LinkedHashMap<String, Type<?>>();
