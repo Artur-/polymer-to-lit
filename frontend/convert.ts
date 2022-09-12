@@ -55,13 +55,16 @@ const modifyClass = (node: any, resolve: Resolver) => {
   let tag = "";
   let template = "";
 
-  if (parentClass.name !== "PolymerElement") {
-    return;
-  }
   newMethodInjectPosition = node.body.end - 1;
 
   // extends PolymerElement -> extends LitElement
-  tsOutput.overwrite(node.superClass.start, node.superClass.end, "LitElement");
+  const newSuper = getSuperClass(node.superClass);
+  if (!newSuper || !newSuper?.includes("LitElement")) {
+    return;
+  }
+  if (newSuper) {
+    tsOutput.overwrite(node.superClass.start, node.superClass.end, newSuper);
+  }
   for (const classContent of node.body.body) {
     if (
       classContent.type == "MethodDefinition" &&
@@ -906,4 +909,15 @@ function prependThisIfNeeded(qualifiedPrefixes: string[], variable: string) {
     return variable;
   }
   return "this." + variable;
+}
+function getSuperClass(superClass: any): string | undefined {
+  if (superClass.type === "CallExpression") {
+    // commonly used for mixins
+    return getSource(superClass).replace("PolymerElement", "LitElement");
+  } else if (superClass.type === "Identifier") {
+    return "LitElement";
+  } else {
+    warn("Unknown super class type", superClass);
+  }
+  return undefined;
 }
