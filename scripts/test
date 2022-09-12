@@ -1,0 +1,9 @@
+#!/bin/bash
+
+in=$1
+
+out=`echo $in|sed "s/\.js$/.ts/"`
+exp=`echo $out|sed "s#in/#expected/#"`
+
+node_modules/.bin/tsc convert.ts && node convert.js $in && prettier --write $out ; diff $out $exp -w -u
+
