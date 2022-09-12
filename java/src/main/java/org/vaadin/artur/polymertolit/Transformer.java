@@ -2,6 +2,7 @@ package org.vaadin.artur.polymertolit;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -25,13 +26,46 @@ public class Transformer {
         String in = args[0];
         String source = read(in);
         String out = transform(source);
-        System.out.println(out);
+        if (source.equals(out)) {
+            return;
+        }
+        if (hasArg(args, "-o")) {
+            try (FileWriter fw = new FileWriter(new File(in))) {
+                fw.write(out);
+            }
+        } else {
+            System.out.println(out);
+        }
+    }
+
+    private static boolean hasArg(String[] args, String string) {
+        for (String arg : args) {
+            if (arg.equals(string)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static String transform(String source) throws IOException {
-        JavaClassSource javaClass = Roaster.parse(JavaClassSource.class, source);
+        JavaClassSource javaClass;
+        try {
+            javaClass = Roaster.parse(JavaClassSource.class, source);
+        } catch (org.jboss.forge.roaster.ParserException e) {
+            e.printStackTrace();
+            return source;
+        }
+
+        System.out.println("Parsed");
         String superType = javaClass.getSuperType();
-        System.out.println(javaClass.getNestedTypes());
+        System.out.println("Superype: " + superType);
+        if (!superType.startsWith("PolymerTemplate")
+                && !superType.startsWith("com.vaadin.flow.component.polymertemplate.PolymerTemplate")) {
+            return source;
+        }
+
+        System.out.println("Transforming");
+        // System.out.println(javaClass.getNestedTypes());
         if (superType.contains("<")) {
             String modelType = superType.substring(superType.indexOf("<") + 1, superType.indexOf(">"));
             transformModel(modelType, javaClass);
@@ -51,7 +85,7 @@ public class Transformer {
             String internalName = modelType.substring(javaClass.getName().length() + 1);
             // Sub interface
             JavaSource<?> nested = javaClass.getNestedType(internalName);
-            System.out.println("Sub: " + nested.isInterface());
+            // System.out.println("Sub: " + nested.isInterface());
             JavaInterfaceSource model = (JavaInterfaceSource) nested;
 
             LinkedHashSet<String> getters = new LinkedHashSet<>();
@@ -90,7 +124,7 @@ public class Transformer {
 
                 if (setters.contains(property)) {
 
-                    System.out.println("Setter: " + property + "(" + type + ")");
+                    // System.out.println("Setter: " + property + "(" + type + ")");
 
                     replacements.put("methodName", "set" + capitalize(property));
 
@@ -110,7 +144,7 @@ public class Transformer {
                 }
                 if (getters.contains(property)) {
 
-                    System.out.println("Getter: " + property + "(" + type + ")");
+                    // System.out.println("Getter: " + property + "(" + type + ")");
 
                     if (type.getName().equals("boolean")) {
                         replacements.put("methodName", "is" + capitalize(property));
