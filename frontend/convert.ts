@@ -446,7 +446,11 @@ const rewriteElement = (element: any, resolver: Resolver) => {
         const expression = value.substring(2, value.length - 2);
         if (key.endsWith("$")) {
           // attribute binding prop$="[[foo]]" => prop=${this.foo}
-          let attributeKey = key.replace("$", "");
+          let attributeKey = key.substring(0, key.length - 1);
+          if (attributeKey.endsWith("\\")) {
+            attributeKey = attributeKey.substring(0, attributeKey.length - 1);
+          }
+
           if (assumeBooleanAttributes.includes(attributeKey)) {
             attributeKey = "?" + attributeKey;
           }
