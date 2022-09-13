@@ -1,4 +1,4 @@
-== Rewriting frontend files
+## Rewriting frontend files
 
 The frontend tool is in the `frontend` folder
 
@@ -18,7 +18,7 @@ node convert.js in/grid-columns.js
 
 This will convert `in/grid-columns.js` into a Lit element and place the output in `in/grid-columns.out.js`
 
-== Rewriting Java files
+## Rewriting Java files
 
 The Java tool is in the `java` folder
 
