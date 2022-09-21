@@ -110,9 +110,10 @@ public class Transformer {
                 }
             }
 
-            MethodSource<JavaClassSource> getModelMethod = javaClass.addMethod("private Model getModel() {}");
+            MethodSource<JavaClassSource> getModelMethod = javaClass
+                    .addMethod("private " + internalName + " getModel() {}");
             StringBuilder body = new StringBuilder();
-            body.append("return new Model() {");
+            body.append("return new ").append(internalName).append("() {");
             for (String property : types.keySet()) {
                 Type<?> type = types.get(property);
 
