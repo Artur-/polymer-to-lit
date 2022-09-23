@@ -5,11 +5,18 @@ import java.io.FileInputStream;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitOption;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import javax.swing.plaf.synth.SynthScrollBarUI;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.text.StringSubstitutor;
@@ -23,28 +30,39 @@ import org.jboss.forge.roaster.model.source.MethodSource;
 
 public class Transformer {
     public static void main(String[] args) throws IOException {
+        if (args.length < 1) {
+            System.err.println("Usage: Transformer <file or directory to convert>");
+            return;
+        }
         String in = args[0];
-        String source = read(in);
+        File inFile = new File(in);
+        if (inFile.isDirectory()) {
+            List<Path> javaFiles = Files.walk(inFile.toPath()).filter(path -> {
+                return (path.toFile().getName().endsWith(".java"));
+            }).collect(Collectors.toList());
+            for (Path javaFile : javaFiles) {
+                transformFile(javaFile.toAbsolutePath().toString());
+            }
+        } else if (inFile.isFile()) {
+            transformFile(in);
+        }
+    }
+
+    private static void transformFile(String filename) throws IOException {
+        String source = read(filename);
+        if (!source.contains("PolymerTemplate")) {
+            return;
+        }
+
+        System.out.println("Processing " + filename);
         String out = transform(source);
         if (source.equals(out)) {
             return;
         }
-        if (hasArg(args, "-o")) {
-            try (FileWriter fw = new FileWriter(new File(in))) {
-                fw.write(out);
-            }
-        } else {
-            System.out.println(out);
+        try (FileWriter fw = new FileWriter(new File(filename))) {
+            fw.write(out);
         }
-    }
 
-    private static boolean hasArg(String[] args, String string) {
-        for (String arg : args) {
-            if (arg.equals(string)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     static String transform(String source) throws IOException {
