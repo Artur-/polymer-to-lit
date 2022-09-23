@@ -79,8 +79,6 @@ public class Transformer {
             return source;
         }
 
-        System.out.println("Transforming");
-        // System.out.println(javaClass.getNestedTypes());
         if (superType.contains("<")) {
             String modelType = superType.substring(superType.indexOf("<") + 1, superType.indexOf(">"));
             if (!modelType.equals("TemplateModel")) {
