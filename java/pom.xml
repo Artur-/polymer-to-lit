@@ -4,7 +4,7 @@
     <packaging>jar</packaging>
     <groupId>org.vaadin.artur</groupId>
     <artifactId>polymer-to-lit</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.6-SNAPSHOT</version>
     <name>PolymerTemplate to LitTemplate converter</name>
     <url>https://vaadin.com</url>
 
