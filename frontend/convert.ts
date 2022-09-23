@@ -1,12 +1,8 @@
 #!/usr/bin/env node
 import * as fs from "fs";
-// const process = require("process");
 import * as acorn from "acorn";
-import * as walk from "acorn-walk";
 import MagicString from "magic-string";
 import * as prettier from "prettier";
-import { inspect } from "util";
-import { resolve } from "path";
 const htmlParse = require("a-node-html-parser").parse;
 const util = require("util");
 
@@ -635,20 +631,9 @@ function resolveExpression(
   undefinedValue: string = "undefined",
   qualifiedPrefixes: string[] = ["this"]
 ) {
-  const s = new MagicString(expression);
   const expr: any = (acorn.parse(expression) as any).body[0];
   // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
 
-  // walk.simple(expr, {
-  //   ExpressionStatement(node: any) {
-  //     debug("ExprsessionStatement", node);
-  //   },
-  //   Identifier(node: any) {
-  //     debug("Identifier", node);
-  //     s.overwrite(node.start, node.end, nullSafe("this." + node.name));
-  //     return false;
-  //   },
-  // });
   return resolver(
     expression,
     expr,
