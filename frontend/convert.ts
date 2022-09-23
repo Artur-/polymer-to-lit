@@ -15,12 +15,7 @@ const assumeBooleanAttributes = ["hidden", "checked"];
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const jsInputFile = process.argv[2];
-let tsOutputFile;
-if (process.argv.includes("-o")) {
-  tsOutputFile = jsInputFile;
-} else {
-  tsOutputFile = jsInputFile.replace(".js", ".out.js");
-}
+let jsOutputFile = jsInputFile;
 const useOptionalChaining = false;
 let useLit1 = false;
 if (process.argv.includes("-1")) {
@@ -756,7 +751,7 @@ output = output.replace(
 const prettified = prettier.format(output, {
   parser: "typescript",
 });
-fs.writeFileSync(tsOutputFile, prettified);
+fs.writeFileSync(jsOutputFile, prettified);
 function removeImport(node: any, ...identifiersOrFrom: string[]) {
   const remove: any[] = [];
   if (identifiersOrFrom.includes(node.source.value)) {
