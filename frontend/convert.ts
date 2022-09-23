@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import * as fs from "fs";
 // const process = require("process");
 import * as acorn from "acorn";
