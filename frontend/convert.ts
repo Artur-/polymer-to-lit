@@ -34,7 +34,6 @@ if (stat.isFile()) {
 
 function convertFile(filename: string) {
   const jsInputFile = filename;
-  console.log("Processing " + jsInputFile);
   let jsOutputFile = jsInputFile;
   const useOptionalChaining = false;
   let useLit1 = false;
@@ -45,6 +44,8 @@ function convertFile(filename: string) {
   if (!jsContents.includes("PolymerElement")) {
     return;
   }
+  console.log("Processing " + jsInputFile);
+
   const tsOutput: MagicString = new MagicString(jsContents);
   const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
   const initValues: any[] = [];
