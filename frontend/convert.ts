@@ -4,8 +4,8 @@ import * as acorn from "acorn";
 import MagicString from "magic-string";
 import * as prettier from "prettier";
 const htmlParse = require("a-node-html-parser").parse;
-const util = require("util");
 import * as glob from "glob";
+import { execSync } from "child_process";
 
 const assumeBooleanAttributes = ["hidden", "checked"];
 
@@ -30,6 +30,64 @@ if (stat.isFile()) {
     // matches.forEach(match => console.log("match",match));
     matches.forEach((file) => convertFile(file));
   });
+
+  // Also convert Java if the needed tools are installed
+  try {
+    run("mvn --version");
+  } catch (e) {
+    console.warn("");
+    console.warn(
+      "Maven (mvn) was not found. Skipping conversion of potential Java files."
+    );
+    console.warn("");
+    process.exit();
+  }
+
+  try {
+    run("java --version");
+  } catch (e) {
+    console.warn("");
+    console.warn(
+      "Java (java) was not found. Skipping conversion of potential Java files."
+    );
+    console.warn("");
+
+    process.exit();
+  }
+
+  const jarVersion = "0.6-SNAPSHOT";
+  const groupId = "org.vaadin.artur";
+  const artifactId = "polymer-to-lit";
+  console.log("Downloading Java dependencies if needed...");
+  try {
+    run(`mvn dependency:get -Dartifact=${groupId}:${artifactId}:${jarVersion}`);
+  } catch (e) {
+    console.error(e);
+    process.exit();
+  }
+
+  console.log("Running Java converter...");
+  let jarPath = "";
+
+  try {
+    jarPath = run(
+      `mvn help:evaluate -q -DforceStdout -Dexpression="settings.localRepository/${groupId.replace(
+        /\./g,
+        "/"
+      )}/${artifactId}/${jarVersion}/${artifactId}-${jarVersion}.jar"`
+    );
+  } catch (e) {
+    console.error(e);
+    process.exit();
+  }
+
+  try {
+    const result = run(`java -jar ${jarPath} ${inputArg}`);
+
+    console.log(result);
+  } catch (e) {
+    console.error(e);
+  }
 }
 
 function convertFile(filename: string) {
@@ -936,4 +994,8 @@ function convertFile(filename: string) {
     }
     return undefined;
   }
+}
+function run(cmd: string) {
+  console.log("Running", cmd);
+  return execSync(cmd, { encoding: "utf-8" });
 }
