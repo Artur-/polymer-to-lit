@@ -1,6 +1,6 @@
 {
   "name": "polymer-to-lit",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "A migration tool for Polymer to Lit for selected cases",
   "bin": {
     "convert": "./convert.js"
@@ -20,12 +20,12 @@
     "acorn": "^7.1.0",
     "acorn-walk": "^8.2.0",
     "magic-string": "^0.26.3",
+    "node-html-parser": "^6.0.0",
     "patch-package": "^6.4.7",
     "prettier": "^2.1.2",
     "typescript": "^4.8.2"
   },
   "devDependencies": {
-    "@types/node": "^13.7.4",
-    "node-html-parser": "^6.0.0"
+    "@types/node": "^13.7.4"
   }
 }
