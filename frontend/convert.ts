@@ -5,77 +5,104 @@ import MagicString from "magic-string";
 import * as prettier from "prettier";
 const htmlParse = require("a-node-html-parser").parse;
 const util = require("util");
+import * as glob from "glob";
 
 const assumeBooleanAttributes = ["hidden", "checked"];
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
-const jsInputFile = process.argv[2];
-let jsOutputFile = jsInputFile;
-const useOptionalChaining = false;
-let useLit1 = false;
-if (process.argv.includes("-1")) {
-  useLit1 = true;
+const inputArg = process.argv[2];
+if (!inputArg) {
+  console.error(`Usage: ${process.argv[1]} <file or directory to convert>`);
+  process.exit();
 }
-const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
-const tsOutput: MagicString = new MagicString(jsContents);
-const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
-const initValues: any[] = [];
-const computedProperties: any[] = [];
-const observedProperties: any[] = [];
-let valueInitPosition = -1;
-let newMethodInjectPosition = -1;
-let usesRepeat = false;
-let usesHeaderRenderer = false;
-let usesBodyRenderer = false;
-let usesFooterRenderer = false;
-let usesUnsafeCss = false;
 
-function error(message?: any, ...optionalParams: any[]) {
-  console.error("ERROR", message, optionalParams);
-}
-function warn(message?: any, ...optionalParams: any[]) {
-  console.warn("WARNING", message, optionalParams);
-}
-function debug(message?: any, ...optionalParams: any[]) {
-  console.log(message, optionalParams);
-}
-const body = (polymerJs as any).body;
-const modifyClass = (node: any, resolve: Resolver) => {
-  const className = node.id.name;
-  const parentClass = node.superClass;
-  let tag = "";
-  let template = "";
+const stat = fs.lstatSync(inputArg);
 
-  newMethodInjectPosition = node.body.end - 1;
+if (stat.isFile()) {
+  convertFile(inputArg);
+} else if (stat.isDirectory()) {
+  glob(inputArg + "/**/*.js", (err, matches) => {
+    if (err) {
+      console.log("Error listing directory", err);
+      return;
+    }
+    // matches.forEach(match => console.log("match",match));
+    matches.forEach((file) => convertFile(file));
+  });
+}
 
-  // extends PolymerElement -> extends LitElement
-  const newSuper = getSuperClass(node.superClass);
-  if (!newSuper || !newSuper?.includes("LitElement")) {
+function convertFile(filename: string) {
+  const jsInputFile = filename;
+  console.log("Processing " + jsInputFile);
+  let jsOutputFile = jsInputFile;
+  const useOptionalChaining = false;
+  let useLit1 = false;
+  if (process.argv.includes("-1")) {
+    useLit1 = true;
+  }
+  const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
+  if (!jsContents.includes("PolymerElement")) {
     return;
   }
-  if (newSuper) {
-    tsOutput.overwrite(node.superClass.start, node.superClass.end, newSuper);
+  const tsOutput: MagicString = new MagicString(jsContents);
+  const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
+  const initValues: any[] = [];
+  const computedProperties: any[] = [];
+  const observedProperties: any[] = [];
+  let valueInitPosition = -1;
+  let newMethodInjectPosition = -1;
+  let usesRepeat = false;
+  let usesHeaderRenderer = false;
+  let usesBodyRenderer = false;
+  let usesFooterRenderer = false;
+  let usesUnsafeCss = false;
+
+  function error(message?: any, ...optionalParams: any[]) {
+    console.error("ERROR", message, optionalParams);
   }
-  for (const classContent of node.body.body) {
-    if (
-      classContent.type == "MethodDefinition" &&
-      classContent.key.name == "template"
-    ) {
-      // Replace the whole template() method
-      const taggedTemplate = classContent.value.body.body[0].argument;
-      template = taggedTemplate.quasi.quasis[0].value.raw;
-      const modifiedTemplate = modifyTemplate(template);
+  function warn(message?: any, ...optionalParams: any[]) {
+    console.warn("WARNING", message, optionalParams);
+  }
+  function debug(message?: any, ...optionalParams: any[]) {
+    console.log(message, optionalParams);
+  }
+  const body = (polymerJs as any).body;
+  const modifyClass = (node: any, resolve: Resolver) => {
+    const className = node.id.name;
+    const parentClass = node.superClass;
+    let tag = "";
+    let template = "";
 
-      const html = modifiedTemplate.htmls.join("\n");
-      // const css = modifiedTemplate.styles.join("\n"); //TODO
-      const hasStyleIncludes = modifiedTemplate.styleIncludes.length > 0;
-      const hasStyles = modifiedTemplate.styles.length > 0;
+    newMethodInjectPosition = node.body.end - 1;
 
-      if (hasStyleIncludes) {
-        usesUnsafeCss = true;
-      }
-      const stylesGetter = `  static get styles() {
+    // extends PolymerElement -> extends LitElement
+    const newSuper = getSuperClass(node.superClass);
+    if (!newSuper || !newSuper?.includes("LitElement")) {
+      return;
+    }
+    if (newSuper) {
+      tsOutput.overwrite(node.superClass.start, node.superClass.end, newSuper);
+    }
+    for (const classContent of node.body.body) {
+      if (
+        classContent.type == "MethodDefinition" &&
+        classContent.key.name == "template"
+      ) {
+        // Replace the whole template() method
+        const taggedTemplate = classContent.value.body.body[0].argument;
+        template = taggedTemplate.quasi.quasis[0].value.raw;
+        const modifiedTemplate = modifyTemplate(template);
+
+        const html = modifiedTemplate.htmls.join("\n");
+        // const css = modifiedTemplate.styles.join("\n"); //TODO
+        const hasStyleIncludes = modifiedTemplate.styleIncludes.length > 0;
+        const hasStyles = modifiedTemplate.styles.length > 0;
+
+        if (hasStyleIncludes) {
+          usesUnsafeCss = true;
+        }
+        const stylesGetter = `  static get styles() {
         ${hasStyleIncludes ? `const includedStyles = {};` : ""}
         ${modifiedTemplate.styleIncludes
           .map(
@@ -97,500 +124,502 @@ const modifyClass = (node: any, resolve: Resolver) => {
         ];
       }`;
 
-      const renderMethod = `render() {
+        const renderMethod = `render() {
         return html\`${html}\`;
               }`;
-      tsOutput.overwrite(
-        classContent.start,
-        classContent.end,
-        (hasStyles ? stylesGetter : "") + renderMethod
-      );
-    } else if (
-      classContent.type == "MethodDefinition" &&
-      classContent.key.name == "is"
-    ) {
-      tag = classContent.value.body.body[0].argument.value;
-      // debug(getSource(classContent));
-    } else if (
-      classContent.type == "MethodDefinition" &&
-      classContent.key.name == "_attachDom"
-    ) {
-      // Assume this means it it using light dom
-      tsOutput.overwrite(
-        classContent.start,
-        classContent.end,
-        `createRenderRoot() {
+        tsOutput.overwrite(
+          classContent.start,
+          classContent.end,
+          (hasStyles ? stylesGetter : "") + renderMethod
+        );
+      } else if (
+        classContent.type == "MethodDefinition" &&
+        classContent.key.name == "is"
+      ) {
+        tag = classContent.value.body.body[0].argument.value;
+        // debug(getSource(classContent));
+      } else if (
+        classContent.type == "MethodDefinition" &&
+        classContent.key.name == "_attachDom"
+      ) {
+        // Assume this means it it using light dom
+        tsOutput.overwrite(
+          classContent.start,
+          classContent.end,
+          `createRenderRoot() {
           // Do not use a shadow root
           return this;
         }
         `
-      );
-    } else if (
-      classContent.type == "MethodDefinition" &&
-      classContent.key.name == "ready"
-    ) {
-      // There is no 'ready' callback but it is approximately run at the same time as 'firstUpdated'
-      // tsOutput.overwrite(classContent.key.start, classContent.key.end, "firstUpdated");
-      // debug(classContent);
-      const src = getSource(classContent);
-      tsOutput.overwrite(
-        classContent.start,
-        classContent.end,
-        src
-          .replace("ready()", "firstUpdated(_changedProperties)")
-          .replace("super.ready()", "super.firstUpdated(_changedProperties)")
-      );
-    } else if (
-      classContent.type === "MethodDefinition" &&
-      classContent.kind === "get" &&
-      classContent.key.name === "properties"
-    ) {
-      if (
-        classContent.value.type === "FunctionExpression" &&
-        classContent.value.body.type == "BlockStatement"
+        );
+      } else if (
+        classContent.type == "MethodDefinition" &&
+        classContent.key.name == "ready"
       ) {
-        const returnStatment = classContent.value.body.body;
+        // There is no 'ready' callback but it is approximately run at the same time as 'firstUpdated'
+        // tsOutput.overwrite(classContent.key.start, classContent.key.end, "firstUpdated");
+        // debug(classContent);
+        const src = getSource(classContent);
+        tsOutput.overwrite(
+          classContent.start,
+          classContent.end,
+          src
+            .replace("ready()", "firstUpdated(_changedProperties)")
+            .replace("super.ready()", "super.firstUpdated(_changedProperties)")
+        );
+      } else if (
+        classContent.type === "MethodDefinition" &&
+        classContent.kind === "get" &&
+        classContent.key.name === "properties"
+      ) {
+        if (
+          classContent.value.type === "FunctionExpression" &&
+          classContent.value.body.type == "BlockStatement"
+        ) {
+          const returnStatment = classContent.value.body.body;
 
-        returnStatment[0].argument.properties.forEach((prop) => {
-          // debug(prop);
-          const propName = prop.key.name;
+          returnStatment[0].argument.properties.forEach((prop) => {
+            // debug(prop);
+            const propName = prop.key.name;
 
-          if (prop.value.type === "Identifier") {
-            // first: String
-            // type of property
-          } else {
-            prop.value.properties.forEach((typeValue) => {
-              const keyNode = typeValue.key;
-              const valueNode = typeValue.value;
+            if (prop.value.type === "Identifier") {
+              // first: String
+              // type of property
+            } else {
+              prop.value.properties.forEach((typeValue) => {
+                const keyNode = typeValue.key;
+                const valueNode = typeValue.value;
 
-              if (keyNode.type === "Identifier") {
-                if (keyNode.name === "value") {
-                  // Value initialization that must go into the constructor
-                  if (valueNode.type === "Literal") {
-                    const initValue = valueNode.raw;
-                    initValues.push({
-                      name: propName,
-                      value: initValue,
-                    });
-                  } else if (valueNode.type === "FunctionExpression") {
-                    if (valueNode?.body?.body[0]?.type === "ReturnStatement") {
-                      const arrayExpression = getSource(
-                        valueNode.body.body[0].argument
-                      );
+                if (keyNode.type === "Identifier") {
+                  if (keyNode.name === "value") {
+                    // Value initialization that must go into the constructor
+                    if (valueNode.type === "Literal") {
+                      const initValue = valueNode.raw;
                       initValues.push({
                         name: propName,
-                        value: arrayExpression,
+                        value: initValue,
                       });
+                    } else if (valueNode.type === "FunctionExpression") {
+                      if (
+                        valueNode?.body?.body[0]?.type === "ReturnStatement"
+                      ) {
+                        const arrayExpression = getSource(
+                          valueNode.body.body[0].argument
+                        );
+                        initValues.push({
+                          name: propName,
+                          value: arrayExpression,
+                        });
+                      }
+                    } else if (valueNode.type === "ArrayExpression") {
+                      initValues.push({
+                        name: propName,
+                        value: getSource(valueNode),
+                      });
+                    } else {
+                      warn(
+                        "UNKNOWN type of 'value' for property",
+                        propName,
+                        ":",
+                        valueNode.type
+                      );
                     }
-                  } else if (valueNode.type === "ArrayExpression") {
-                    initValues.push({
+                    removeIncludingTrailingComma(typeValue);
+                  } else if (keyNode.name === "computed") {
+                    computedProperties.push({
                       name: propName,
-                      value: getSource(valueNode),
-                    });
-                  } else {
-                    warn(
-                      "UNKNOWN type of 'value' for property",
-                      propName,
-                      ":",
-                      valueNode.type
-                    );
-                  }
-                  removeIncludingTrailingComma(typeValue);
-                } else if (keyNode.name === "computed") {
-                  computedProperties.push({
-                    name: propName,
-                    value: resolveExpression(valueNode.value, true, resolve),
-                  });
-                  removeIncludingTrailingComma(typeValue);
-                } else if (keyNode.name === "observer") {
-                  const observer = valueNode.value;
-                  if (observer.includes("(")) {
-                    // Complex observer
-                    tsOutput.prependLeft(
-                      valueNode.start,
-                      "/* TODO: Convert this complex observer manually */\n"
-                    );
-                  } else {
-                    observedProperties.push({
-                      name: propName,
-                      value: observer,
+                      value: resolveExpression(valueNode.value, true, resolve),
                     });
                     removeIncludingTrailingComma(typeValue);
-                  }
-                } else if (keyNode.name === "reflectToAttribute") {
-                  removeIncludingTrailingComma(typeValue);
-                  if (
-                    valueNode.type === "Literal" &&
-                    valueNode.raw === "true"
-                  ) {
-                    tsOutput.prependLeft(typeValue.start, "reflect: true,");
+                  } else if (keyNode.name === "observer") {
+                    const observer = valueNode.value;
+                    if (observer.includes("(")) {
+                      // Complex observer
+                      tsOutput.prependLeft(
+                        valueNode.start,
+                        "/* TODO: Convert this complex observer manually */\n"
+                      );
+                    } else {
+                      observedProperties.push({
+                        name: propName,
+                        value: observer,
+                      });
+                      removeIncludingTrailingComma(typeValue);
+                    }
+                  } else if (keyNode.name === "reflectToAttribute") {
+                    removeIncludingTrailingComma(typeValue);
+                    if (
+                      valueNode.type === "Literal" &&
+                      valueNode.raw === "true"
+                    ) {
+                      tsOutput.prependLeft(typeValue.start, "reflect: true,");
+                    }
                   }
                 }
-              }
-            });
-          }
-        });
+              });
+            }
+          });
+        }
+      } else if (
+        classContent.type === "MethodDefinition" &&
+        classContent.kind === "constructor"
+      ) {
+        const constructorNode = classContent;
+        valueInitPosition = constructorNode.value.body.end - 1;
+      } else {
+        // warn("Unhandled class content", classContent);
       }
-    } else if (
-      classContent.type === "MethodDefinition" &&
-      classContent.kind === "constructor"
-    ) {
-      const constructorNode = classContent;
-      valueInitPosition = constructorNode.value.body.end - 1;
-    } else {
-      // warn("Unhandled class content", classContent);
+      // TODO handle properties
+      // static get properties() {
+      //   return {
+      //     myProperty: Boolean,
+      //     mySecondProperty: {
+      //       type: String,
+      //       reflectToAttribute: true
+      //     }
+      //   };
+      // }
+      // ->
+      // static get properties() {
+      //   return {
+      //     myProperty: { type: Boolean },
+      //     mySecondProperty: {
+      //       type: String,
+      //       reflect: true
+      //     }
+      //   };
+      // }
+      // or
+      // @property({ type: Boolean })
+      // myProperty = false;
+      // debug(getSource(classContent));
     }
-    // TODO handle properties
-    // static get properties() {
-    //   return {
-    //     myProperty: Boolean,
-    //     mySecondProperty: {
-    //       type: String,
-    //       reflectToAttribute: true
-    //     }
-    //   };
+    return { className, parentClass, template, tag };
+  };
+
+  const removeIncludingTrailingComma = (node) => {
+    if (jsContents.substring(node.end, node.end + 1) === ",") {
+      tsOutput.remove(node.start, node.end + 1);
+    } else {
+      tsOutput.remove(node.start, node.end);
+    }
+    // debug(
+    //   getSource(node),
+    //   "and then",
+    //   jsContents.substring(node.end, node.end + 1+5)
+    // );
+    // if (jsContents.charAt(node.end+1)===',') {
+    //   tsOutput.remove(node.end+1,node.end+1);
     // }
-    // ->
-    // static get properties() {
-    //   return {
-    //     myProperty: { type: Boolean },
-    //     mySecondProperty: {
-    //       type: String,
-    //       reflect: true
-    //     }
-    //   };
-    // }
-    // or
-    // @property({ type: Boolean })
-    // myProperty = false;
-    // debug(getSource(classContent));
-  }
-  return { className, parentClass, template, tag };
-};
+    // Fixme trailing ,
+  };
+  const rewriteTextNode = (node, resolver: Resolver) => {
+    const bindingRe = /\[\[(.+?)\]\]/g;
+    const bindingRe2 = /\{\{(.+?)\}\}/g;
 
-const removeIncludingTrailingComma = (node) => {
-  if (jsContents.substring(node.end, node.end + 1) === ",") {
-    tsOutput.remove(node.start, node.end + 1);
-  } else {
-    tsOutput.remove(node.start, node.end);
-  }
-  // debug(
-  //   getSource(node),
-  //   "and then",
-  //   jsContents.substring(node.end, node.end + 1+5)
-  // );
-  // if (jsContents.charAt(node.end+1)===',') {
-  //   tsOutput.remove(node.end+1,node.end+1);
-  // }
-  // Fixme trailing ,
-};
-const rewriteTextNode = (node, resolver: Resolver) => {
-  const bindingRe = /\[\[(.+?)\]\]/g;
-  const bindingRe2 = /\{\{(.+?)\}\}/g;
+    var result = node.rawText;
+    result = result.replace(bindingRe, (_fullMatch, variableName) => {
+      const resolved = resolveExpression(variableName, true, resolver);
+      return `\${${resolved}}`;
+    });
+    result = result.replace(bindingRe2, (_fullMatch, variableName) => {
+      const resolved = resolveExpression(variableName, true, resolver);
+      return `\${${resolved}}`;
+    });
+    node.rawText = result;
+  };
 
-  var result = node.rawText;
-  result = result.replace(bindingRe, (_fullMatch, variableName) => {
-    const resolved = resolveExpression(variableName, true, resolver);
-    return `\${${resolved}}`;
-  });
-  result = result.replace(bindingRe2, (_fullMatch, variableName) => {
-    const resolved = resolveExpression(variableName, true, resolver);
-    return `\${${resolved}}`;
-  });
-  node.rawText = result;
-};
+  type Resolver = (
+    originalExpression: string,
+    node: any,
+    makeNullSafe: boolean,
+    resolver: Resolver,
+    undefinedValue: string,
+    qualifiedPrefixes: string[]
+  ) => string;
 
-type Resolver = (
-  originalExpression: string,
-  node: any,
-  makeNullSafe: boolean,
-  resolver: Resolver,
-  undefinedValue: string,
-  qualifiedPrefixes: string[]
-) => string;
-
-const rewriteElement = (element: any, resolver: Resolver) => {
-  if (
-    element.tagName === "TEMPLATE" &&
-    element.getAttribute("is") === "dom-if"
-  ) {
-    const polymerExpression = element.getAttribute("if");
-    replaceWithLitIf(element, polymerExpression, resolver, element);
-    return;
-  } else if (element.tagName === "DOM-IF") {
-    const template = element.childNodes.filter(
-      (el) => el.tagName === "TEMPLATE"
-    )[0];
-    const polymerExpression = element.getAttribute("if");
-    replaceWithLitIf(element, polymerExpression, resolver, template);
-    return;
-  } else if (element.tagName === "DOM-REPEAT") {
-    const template = element.childNodes.filter(
-      (el) => el.tagName === "TEMPLATE"
-    )[0];
-    const polymerItemsExpression = element.getAttribute("items");
-    replaceWithLitRepeat(element, polymerItemsExpression, resolver, template);
-    return;
-  } else if (
-    element.tagName === "TEMPLATE" &&
-    element.getAttribute("is") === "dom-repeat"
-  ) {
-    const polymerItemsExpression = element.getAttribute("items");
-    replaceWithLitRepeat(element, polymerItemsExpression, resolver, element);
-    return;
-  } else if (element.tagName === "VAADIN-GRID-COLUMN") {
-    const templates = element.childNodes.filter(
-      (child) => child.tagName === "TEMPLATE"
-    );
-    const headerTemplate = templates.find(
-      (template) => template.getAttribute("class") === "header"
-    );
-    const bodyTemplate = templates.find(
-      (template) => !template.hasAttribute("class")
-    );
-    const footerTemplate = templates.find(
-      (template) => template.getAttribute("class") === "footer"
-    );
-
-    if (headerTemplate) {
-      usesHeaderRenderer = true;
-      headerTemplate.childNodes.forEach((child) =>
-        rewriteHtmlNode(child, resolver)
+  const rewriteElement = (element: any, resolver: Resolver) => {
+    if (
+      element.tagName === "TEMPLATE" &&
+      element.getAttribute("is") === "dom-if"
+    ) {
+      const polymerExpression = element.getAttribute("if");
+      replaceWithLitIf(element, polymerExpression, resolver, element);
+      return;
+    } else if (element.tagName === "DOM-IF") {
+      const template = element.childNodes.filter(
+        (el) => el.tagName === "TEMPLATE"
+      )[0];
+      const polymerExpression = element.getAttribute("if");
+      replaceWithLitIf(element, polymerExpression, resolver, template);
+      return;
+    } else if (element.tagName === "DOM-REPEAT") {
+      const template = element.childNodes.filter(
+        (el) => el.tagName === "TEMPLATE"
+      )[0];
+      const polymerItemsExpression = element.getAttribute("items");
+      replaceWithLitRepeat(element, polymerItemsExpression, resolver, template);
+      return;
+    } else if (
+      element.tagName === "TEMPLATE" &&
+      element.getAttribute("is") === "dom-repeat"
+    ) {
+      const polymerItemsExpression = element.getAttribute("items");
+      replaceWithLitRepeat(element, polymerItemsExpression, resolver, element);
+      return;
+    } else if (element.tagName === "VAADIN-GRID-COLUMN") {
+      const templates = element.childNodes.filter(
+        (child) => child.tagName === "TEMPLATE"
+      );
+      const headerTemplate = templates.find(
+        (template) => template.getAttribute("class") === "header"
+      );
+      const bodyTemplate = templates.find(
+        (template) => !template.hasAttribute("class")
+      );
+      const footerTemplate = templates.find(
+        (template) => template.getAttribute("class") === "footer"
       );
 
-      element.setAttribute(
-        `\${columnHeaderRenderer(
+      if (headerTemplate) {
+        usesHeaderRenderer = true;
+        headerTemplate.childNodes.forEach((child) =>
+          rewriteHtmlNode(child, resolver)
+        );
+
+        element.setAttribute(
+          `\${columnHeaderRenderer(
         (column) =>
           html\`${headerTemplate.innerHTML}\`
       )}
       `,
-        ""
-      );
-      headerTemplate.remove();
-    }
-    if (bodyTemplate) {
-      usesBodyRenderer = true;
-      const itemResolver: Resolver = (
-        originalExpression,
-        expr,
-        makeNullSafe,
-        resolver,
-        undefinedValue
-      ) => {
-        if (originalExpression.startsWith("item.")) {
-          return makeNullSafe
-            ? nullSafe(originalExpression, ["item", "this"], undefinedValue)
-            : originalExpression;
-        }
-
-        return resolver(
+          ""
+        );
+        headerTemplate.remove();
+      }
+      if (bodyTemplate) {
+        usesBodyRenderer = true;
+        const itemResolver: Resolver = (
           originalExpression,
           expr,
-          true,
-          itemResolver,
-          undefinedValue,
-          ["this"]
-        );
-      };
-      bodyTemplate.childNodes.forEach((child) =>
-        rewriteHtmlNode(child, itemResolver)
-      );
+          makeNullSafe,
+          resolver,
+          undefinedValue
+        ) => {
+          if (originalExpression.startsWith("item.")) {
+            return makeNullSafe
+              ? nullSafe(originalExpression, ["item", "this"], undefinedValue)
+              : originalExpression;
+          }
 
-      element.setAttribute(
-        `\${columnBodyRenderer(
+          return resolver(
+            originalExpression,
+            expr,
+            true,
+            itemResolver,
+            undefinedValue,
+            ["this"]
+          );
+        };
+        bodyTemplate.childNodes.forEach((child) =>
+          rewriteHtmlNode(child, itemResolver)
+        );
+
+        element.setAttribute(
+          `\${columnBodyRenderer(
         (item) =>
           html\`${bodyTemplate.innerHTML}\`
       )}
       `,
-        ""
-      );
-      bodyTemplate.remove();
-    }
-    if (footerTemplate) {
-      usesFooterRenderer = true;
-      footerTemplate.childNodes.forEach((child) =>
-        rewriteHtmlNode(child, resolver)
-      );
+          ""
+        );
+        bodyTemplate.remove();
+      }
+      if (footerTemplate) {
+        usesFooterRenderer = true;
+        footerTemplate.childNodes.forEach((child) =>
+          rewriteHtmlNode(child, resolver)
+        );
 
-      element.setAttribute(
-        `\${columnFooterRenderer(
+        element.setAttribute(
+          `\${columnFooterRenderer(
         (column) =>
           html\`${footerTemplate.innerHTML}\`
       )}
       `,
-        ""
-      );
-      footerTemplate.remove();
-    }
-  } else if (element.attributes) {
-    // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
-    for (const key of Object.keys(element.attributes)) {
-      const value = element.attributes[key];
+          ""
+        );
+        footerTemplate.remove();
+      }
+    } else if (element.attributes) {
+      // TODO rewrite input checked="[[checked]]" => ?checked=${this.checked}
+      for (const key of Object.keys(element.attributes)) {
+        const value = element.attributes[key];
 
-      if (key.startsWith("on-")) {
-        const eventName = key.substring(3);
-        const eventHandler = value;
-        element.removeAttribute(key);
-        element.setAttribute("@" + eventName, `\${this.${eventHandler}}`);
-      } else if (
-        (value.startsWith("[[") && value.endsWith("]]")) ||
-        (value.startsWith("{{") && value.endsWith("}}"))
-      ) {
-        const twoWay = value.startsWith("{{");
-
-        const expression = value.substring(2, value.length - 2);
-        if (key.endsWith("$")) {
-          // attribute binding prop$="[[foo]]" => prop=${this.foo}
-          let attributeKey = key.substring(0, key.length - 1);
-          if (attributeKey.endsWith("\\")) {
-            attributeKey = attributeKey.substring(0, attributeKey.length - 1);
-          }
-
-          if (assumeBooleanAttributes.includes(attributeKey)) {
-            attributeKey = "?" + attributeKey;
-          }
-          element.setAttribute(
-            attributeKey,
-            "${" + resolveExpression(expression, true, resolver) + "}"
-          );
+        if (key.startsWith("on-")) {
+          const eventName = key.substring(3);
+          const eventHandler = value;
           element.removeAttribute(key);
+          element.setAttribute("@" + eventName, `\${this.${eventHandler}}`);
+        } else if (
+          (value.startsWith("[[") && value.endsWith("]]")) ||
+          (value.startsWith("{{") && value.endsWith("}}"))
+        ) {
+          const twoWay = value.startsWith("{{");
+
+          const expression = value.substring(2, value.length - 2);
+          if (key.endsWith("$")) {
+            // attribute binding prop$="[[foo]]" => prop=${this.foo}
+            let attributeKey = key.substring(0, key.length - 1);
+            if (attributeKey.endsWith("\\")) {
+              attributeKey = attributeKey.substring(0, attributeKey.length - 1);
+            }
+
+            if (assumeBooleanAttributes.includes(attributeKey)) {
+              attributeKey = "?" + attributeKey;
+            }
+            element.setAttribute(
+              attributeKey,
+              "${" + resolveExpression(expression, true, resolver) + "}"
+            );
+            element.removeAttribute(key);
+          } else {
+            // property binding prop="[[foo]]" => .prop=${this.foo}
+            // prop="[[!and(property1, property2)]]" => .prop=${!this.and(this.property1, this.property2)}
+            // debug("Rewrite prop: ", key, value);
+            element.setAttribute(
+              "." + key,
+              "${" + resolveExpression(expression, true, resolver) + "}"
+            );
+            element.removeAttribute(key);
+          }
+
+          if (twoWay) {
+            // @value-change=${(e) => (this.name = e.target.value)}
+            const eventName = key + "-changed";
+            const attributeKey = "@" + eventName;
+            const attributeValue = `\${(e) => (${resolveExpression(
+              expression,
+              false,
+              resolver
+            )} = e.target.value)}`;
+            element.setAttribute(attributeKey, attributeValue);
+          }
+        }
+      }
+    }
+
+    //
+    for (const child of element.childNodes) {
+      rewriteHtmlNode(child, resolver);
+    }
+  };
+  const modifyTemplate = (inputHtml) => {
+    //  if (inputHtml.includes("}}")) {
+    //   throw "Template contains two way bindings which are not supported";
+    // }
+    const root = htmlParse(inputHtml, {
+      lowerCaseTagName: true,
+      script: true,
+      style: true,
+      pre: true,
+      comment: true,
+    });
+    // debug(root.innerHTML);
+    const htmls: string[] = [];
+    const styles: string[] = [];
+    const styleIncludes: string[] = [];
+    for (const child of root.childNodes) {
+      // debug(child);
+      if (child.tagName == "CUSTOM-STYLE" || child.tagName == "STYLE") {
+        let style;
+        if (child.tagName == "CUSTOM-STYLE") {
+          style = child.childNodes[1];
         } else {
-          // property binding prop="[[foo]]" => .prop=${this.foo}
-          // prop="[[!and(property1, property2)]]" => .prop=${!this.and(this.property1, this.property2)}
-          // debug("Rewrite prop: ", key, value);
-          element.setAttribute(
-            "." + key,
-            "${" + resolveExpression(expression, true, resolver) + "}"
-          );
-          element.removeAttribute(key);
+          style = child;
         }
-
-        if (twoWay) {
-          // @value-change=${(e) => (this.name = e.target.value)}
-          const eventName = key + "-changed";
-          const attributeKey = "@" + eventName;
-          const attributeValue = `\${(e) => (${resolveExpression(
-            expression,
-            false,
-            resolver
-          )} = e.target.value)}`;
-          element.setAttribute(attributeKey, attributeValue);
+        const includes: string = style.getAttribute("include");
+        if (includes) {
+          styleIncludes.push(...includes.split(" "));
         }
-      }
-    }
-  }
-
-  //
-  for (const child of element.childNodes) {
-    rewriteHtmlNode(child, resolver);
-  }
-};
-const modifyTemplate = (inputHtml) => {
-  //  if (inputHtml.includes("}}")) {
-  //   throw "Template contains two way bindings which are not supported";
-  // }
-  const root = htmlParse(inputHtml, {
-    lowerCaseTagName: true,
-    script: true,
-    style: true,
-    pre: true,
-    comment: true,
-  });
-  // debug(root.innerHTML);
-  const htmls: string[] = [];
-  const styles: string[] = [];
-  const styleIncludes: string[] = [];
-  for (const child of root.childNodes) {
-    // debug(child);
-    if (child.tagName == "CUSTOM-STYLE" || child.tagName == "STYLE") {
-      let style;
-      if (child.tagName == "CUSTOM-STYLE") {
-        style = child.childNodes[1];
+        const css = style.innerHTML;
+        styles.push(css);
+        child.remove();
       } else {
-        style = child;
+        rewriteHtmlNode(child, baseResolver);
+        // if (child.nodeType === 1) {
+        //   htmls.push(child.outerHTML);
+        // } else {
+        //   htmls.push(child.rawText);
+        // }
+        // TODO  href="mailto:[[item.email]]"
+        // TODO <template> tags
       }
-      const includes: string = style.getAttribute("include");
-      if (includes) {
-        styleIncludes.push(...includes.split(" "));
-      }
-      const css = style.innerHTML;
-      styles.push(css);
-      child.remove();
-    } else {
-      rewriteHtmlNode(child, baseResolver);
-      // if (child.nodeType === 1) {
-      //   htmls.push(child.outerHTML);
-      // } else {
-      //   htmls.push(child.rawText);
-      // }
-      // TODO  href="mailto:[[item.email]]"
-      // TODO <template> tags
+    }
+    htmls.push(root.innerHTML);
+
+    const ret = { htmls, styles, styleIncludes };
+    //debug(ret);
+    return ret;
+  };
+
+  const getSource = (node: any) => {
+    return jsContents.substring(node.start, node.end);
+  };
+  const skipImports = [
+    "@polymer/polymer/polymer-element.js",
+    "@polymer/polymer/lib/utils/html-tag.js",
+  ];
+  for (const node of body) {
+    if (node.type === "ClassDeclaration") {
+      modifyClass(node, baseResolver);
+    } else if (node.type === "ImportDeclaration") {
+      removeImport(node, "html", "PolymerElement");
+      removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
+      removeImport(node, "@polymer/polymer/lib/elements/dom-repeat.js");
+    } else if (!getSource(node).includes("customElements.define")) {
+      warn("Unhandled root node", node.type, getSource(node));
     }
   }
-  htmls.push(root.innerHTML);
 
-  const ret = { htmls, styles, styleIncludes };
-  //debug(ret);
-  return ret;
-};
-
-const getSource = (node: any) => {
-  return jsContents.substring(node.start, node.end);
-};
-const skipImports = [
-  "@polymer/polymer/polymer-element.js",
-  "@polymer/polymer/lib/utils/html-tag.js",
-];
-for (const node of body) {
-  if (node.type === "ClassDeclaration") {
-    modifyClass(node, baseResolver);
-  } else if (node.type === "ImportDeclaration") {
-    removeImport(node, "html", "PolymerElement");
-    removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
-    removeImport(node, "@polymer/polymer/lib/elements/dom-repeat.js");
-  } else if (!getSource(node).includes("customElements.define")) {
-    warn("Unhandled root node", node.type, getSource(node));
+  const litImport = useLit1 ? "lit-element" : "lit";
+  tsOutput.prepend(`import { html, LitElement, css } from "${litImport}";\n`);
+  if (usesRepeat) {
+    tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";\n`);
   }
-}
+  if (usesUnsafeCss) {
+    tsOutput.prepend(`import { unsafeCSS } from "${litImport}";\n`);
+  }
 
-const litImport = useLit1 ? "lit-element" : "lit";
-tsOutput.prepend(`import { html, LitElement, css } from "${litImport}";\n`);
-if (usesRepeat) {
-  tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";\n`);
-}
-if (usesUnsafeCss) {
-  tsOutput.prepend(`import { unsafeCSS } from "${litImport}";\n`);
-}
+  const usedRenderers: string[] = [];
+  if (usesBodyRenderer) usedRenderers.push("columnBodyRenderer");
+  if (usesFooterRenderer) usedRenderers.push("columnFooterRenderer");
+  if (usesHeaderRenderer) usedRenderers.push("columnHeaderRenderer");
+  if (usedRenderers.length !== 0) {
+    tsOutput.prepend(
+      `import { ${usedRenderers.join(", ")} } from "@vaadin/grid/lit.js";\n`
+    );
+  }
 
-const usedRenderers: string[] = [];
-if (usesBodyRenderer) usedRenderers.push("columnBodyRenderer");
-if (usesFooterRenderer) usedRenderers.push("columnFooterRenderer");
-if (usesHeaderRenderer) usedRenderers.push("columnHeaderRenderer");
-if (usedRenderers.length !== 0) {
-  tsOutput.prepend(
-    `import { ${usedRenderers.join(", ")} } from "@vaadin/grid/lit.js";\n`
-  );
-}
+  const valueInitCode = initValues
+    .map((initValue) => {
+      return `this.${initValue.name} = ${initValue.value};`;
+    })
+    .join("\n");
 
-const valueInitCode = initValues
-  .map((initValue) => {
-    return `this.${initValue.name} = ${initValue.value};`;
-  })
-  .join("\n");
-
-const computedPropertiesCode = computedProperties
-  .map((computedProperty) => {
-    return `get ${computedProperty.name}() {
+  const computedPropertiesCode = computedProperties
+    .map((computedProperty) => {
+      return `get ${computedProperty.name}() {
       return ${computedProperty.value};
     }`;
-  })
-  .join("\n");
+    })
+    .join("\n");
 
-const observedPropertiesCode = observedProperties
-  .map((observedProperty) => {
-    const variable = observedProperty.name;
-    const observer = observedProperty.value;
-    return `set ${variable}(newValue) {
+  const observedPropertiesCode = observedProperties
+    .map((observedProperty) => {
+      const variable = observedProperty.name;
+      const observer = observedProperty.value;
+      return `set ${variable}(newValue) {
       const oldValue = this.${variable};
       this._${variable} = newValue;
       if (oldValue !== newValue) {
@@ -602,303 +631,308 @@ const observedPropertiesCode = observedProperties
       return this._${variable};
     }
   `;
-  })
-  .join("\n");
-if (valueInitCode.length != 0) {
-  if (valueInitPosition !== -1) {
-    tsOutput.prependRight(valueInitPosition, valueInitCode);
-  } else {
-    // No constructor
-    const constructorCode = `constructor() {
+    })
+    .join("\n");
+  if (valueInitCode.length != 0) {
+    if (valueInitPosition !== -1) {
+      tsOutput.prependRight(valueInitPosition, valueInitCode);
+    } else {
+      // No constructor
+      const constructorCode = `constructor() {
         super();
         ${valueInitCode}
       }`;
-    tsOutput.prependRight(newMethodInjectPosition, constructorCode);
+      tsOutput.prependRight(newMethodInjectPosition, constructorCode);
+    }
   }
-}
 
-if (observedPropertiesCode.length != 0) {
-  tsOutput.prependRight(newMethodInjectPosition, observedPropertiesCode);
-}
-if (computedPropertiesCode.length != 0) {
-  tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
-}
+  if (observedPropertiesCode.length != 0) {
+    tsOutput.prependRight(newMethodInjectPosition, observedPropertiesCode);
+  }
+  if (computedPropertiesCode.length != 0) {
+    tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
+  }
 
-function resolveExpression(
-  expression: string,
-  makeNullSafe: boolean,
-  resolver: Resolver,
-  undefinedValue: string = "undefined",
-  qualifiedPrefixes: string[] = ["this"]
-) {
-  const expr: any = (acorn.parse(expression) as any).body[0];
-  // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
+  function resolveExpression(
+    expression: string,
+    makeNullSafe: boolean,
+    resolver: Resolver,
+    undefinedValue: string = "undefined",
+    qualifiedPrefixes: string[] = ["this"]
+  ) {
+    const expr: any = (acorn.parse(expression) as any).body[0];
+    // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
 
-  return resolver(
-    expression,
-    expr,
-    makeNullSafe,
-    resolver,
-    undefinedValue,
-    qualifiedPrefixes
-  );
-}
-function baseResolver(
-  originalExpression: string,
-  expr: any,
-  makeNullSafe: boolean,
-  resolve: Resolver,
-  undefinedValue: string,
-  qualifiedPrefixes: string[]
-) {
-  // debug("thisResolver", expr.type);
-  if (expr.type === "ExpressionStatement") {
-    return resolve(
-      originalExpression,
-      expr.expression,
+    return resolver(
+      expression,
+      expr,
       makeNullSafe,
-      resolve,
+      resolver,
       undefinedValue,
       qualifiedPrefixes
     );
-  } else if (expr.type === "MemberExpression") {
-    const result = prependThisIfNeeded(
-      qualifiedPrefixes,
-      originalExpression.substring(expr.start, expr.end)
-    );
-
-    return makeNullSafe
-      ? nullSafe(result, qualifiedPrefixes, undefinedValue)
-      : result;
-  } else if (expr.type === "Literal") {
-    return expr.raw;
-  } else if (expr.type === "Identifier") {
-    const result = prependThisIfNeeded(qualifiedPrefixes, expr.name);
-    return makeNullSafe
-      ? nullSafe(result, qualifiedPrefixes, undefinedValue)
-      : result;
-  } else if (expr.type === "UnaryExpression") {
-    return (
-      expr.operator +
-      "(" +
-      resolve(
+  }
+  function baseResolver(
+    originalExpression: string,
+    expr: any,
+    makeNullSafe: boolean,
+    resolve: Resolver,
+    undefinedValue: string,
+    qualifiedPrefixes: string[]
+  ) {
+    // debug("thisResolver", expr.type);
+    if (expr.type === "ExpressionStatement") {
+      return resolve(
         originalExpression,
-        expr.argument,
+        expr.expression,
         makeNullSafe,
         resolve,
         undefinedValue,
         qualifiedPrefixes
-      ) +
-      ")"
-    );
-  } else if (expr.type === "CallExpression") {
-    const args = expr.arguments
-      .map((argument) =>
+      );
+    } else if (expr.type === "MemberExpression") {
+      const result = prependThisIfNeeded(
+        qualifiedPrefixes,
+        originalExpression.substring(expr.start, expr.end)
+      );
+
+      return makeNullSafe
+        ? nullSafe(result, qualifiedPrefixes, undefinedValue)
+        : result;
+    } else if (expr.type === "Literal") {
+      return expr.raw;
+    } else if (expr.type === "Identifier") {
+      const result = prependThisIfNeeded(qualifiedPrefixes, expr.name);
+      return makeNullSafe
+        ? nullSafe(result, qualifiedPrefixes, undefinedValue)
+        : result;
+    } else if (expr.type === "UnaryExpression") {
+      return (
+        expr.operator +
+        "(" +
         resolve(
           originalExpression,
-          argument,
+          expr.argument,
           makeNullSafe,
           resolve,
           undefinedValue,
           qualifiedPrefixes
+        ) +
+        ")"
+      );
+    } else if (expr.type === "CallExpression") {
+      const args = expr.arguments
+        .map((argument) =>
+          resolve(
+            originalExpression,
+            argument,
+            makeNullSafe,
+            resolve,
+            undefinedValue,
+            qualifiedPrefixes
+          )
         )
-      )
-      .join(", ");
-    const caller = resolve(
-      originalExpression,
-      expr.callee,
-      makeNullSafe,
-      resolve,
-      undefinedValue,
-      qualifiedPrefixes
-    );
-    const retval = "(" + caller + ")(" + args + ")";
-    // debug("Caller", caller);
-    // debug("Call ret", retval);
+        .join(", ");
+      const caller = resolve(
+        originalExpression,
+        expr.callee,
+        makeNullSafe,
+        resolve,
+        undefinedValue,
+        qualifiedPrefixes
+      );
+      const retval = "(" + caller + ")(" + args + ")";
+      // debug("Caller", caller);
+      // debug("Call ret", retval);
+      return retval;
+    }
+    // debug(expr);
+    const retval = originalExpression.substring(expr.start, expr.end);
+    warn("Unresolved expression", expr, "returning", retval);
     return retval;
   }
-  // debug(expr);
-  const retval = originalExpression.substring(expr.start, expr.end);
-  warn("Unresolved expression", expr, "returning", retval);
-  return retval;
-}
 
-let output = tsOutput.toString();
-// this.$['ordersGrid'] -> this.renderRoot.querySelector("#ordersGrid")
-output = output.replace(
-  /this.\$\[['"]([^;., ()]*['"]\])/g,
-  `this.renderRoot.querySelector("#$1")`
-);
-output = output.replace(
-  /this\.\$\.([^;., ()]*)/g,
-  `this.renderRoot.querySelector("#$1")`
-);
-const prettified = prettier.format(output, {
-  parser: "typescript",
-});
-fs.writeFileSync(jsOutputFile, prettified);
-function removeImport(node: any, ...identifiersOrFrom: string[]) {
-  const remove: any[] = [];
-  if (identifiersOrFrom.includes(node.source.value)) {
-    tsOutput.remove(node.start, node.end);
-    return;
-  }
-  node.specifiers.forEach((specifier) => {
-    if (identifiersOrFrom.includes(specifier?.imported?.name)) {
-      remove.push(specifier);
-    }
+  let output = tsOutput.toString();
+  // this.$['ordersGrid'] -> this.renderRoot.querySelector("#ordersGrid")
+  output = output.replace(
+    /this.\$\[['"]([^;., ()]*['"]\])/g,
+    `this.renderRoot.querySelector("#$1")`
+  );
+  output = output.replace(
+    /this\.\$\.([^;., ()]*)/g,
+    `this.renderRoot.querySelector("#$1")`
+  );
+  const prettified = prettier.format(output, {
+    parser: "typescript",
   });
-  if (remove.length === 0) {
-    return;
-  }
-  if (remove.length === node.specifiers.length) {
-    // Remove all
-    tsOutput.remove(node.start, node.end);
-  } else {
-    error("Unable to remove only part of an import");
-    //FIXME Broken
-    remove.forEach((specifier) => removeIncludingTrailingComma(specifier));
-  }
-}
-function rewriteHtmlNode(child: any, resolver: Resolver) {
-  if (child.nodeType === 1) {
-    rewriteElement(child, resolver);
-  } else if (child.nodeType === 3) {
-    rewriteTextNode(child, resolver);
-  } else {
-    warn("unhandled child", child);
-  }
-}
-function replaceWithLitIf(
-  element: any,
-  polymerExpression: string,
-  resolver: Resolver,
-  template: any
-) {
-  const expression = polymerExpression.substring(
-    2,
-    polymerExpression.length - 2
-  );
-
-  const litExpression = resolveExpression(expression, true, resolver);
-  template.childNodes.forEach((child) => rewriteElement(child, resolver));
-  const litIf = `\${${litExpression} ? html\`${template.innerHTML}\` : html\`\`}`;
-  element.replaceWith(litIf);
-}
-
-function replaceWithLitRepeat(
-  element: any,
-  polymerItemsExpression: string,
-  outerResolver: Resolver,
-  template: any
-) {
-  const expression = polymerItemsExpression.substring(
-    2,
-    polymerItemsExpression.length - 2
-  );
-
-  // debug("expression", expression);
-  const litExpression = resolveExpression(
-    expression,
-    true,
-    outerResolver,
-    "[]"
-  );
-  // debug("litExpression", litExpression);
-
-  const itemResolver = (
-    originalExpression: string,
-    node: any,
-    makeNullSafe: boolean,
-    resolver: Resolver,
-    undefinedValue: string,
-    qualifiedPrefixes
-  ) => {
-    return resolver(
-      originalExpression,
-      node,
-      makeNullSafe,
-      outerResolver,
-      undefinedValue,
-      [...qualifiedPrefixes, "item", "index"]
-    );
-  };
-
-  template.childNodes.forEach((child) => rewriteElement(child, itemResolver));
-
-  const litRepeat = `\${(${litExpression}).map((item, index) => html\`${template.innerHTML}\`)}`;
-  element.replaceWith(litRepeat);
-}
-function nullSafe(name: any, assumedNonNull: string[], undefinedValue: string) {
-  // debug("nullSafe", name);
-  // Polymer allows using "a.b.c" when "a" or "b" is undefined
-  // webpack 4 does not support ?. so to be compati
-  if (useOptionalChaining) {
-    const first = name.split(".")[0];
-    if (assumedNonNull.includes(first)) {
-      return (
-        first + "." + name.substring(first.length + 1).replace(/\./g, "?.")
-      );
+  fs.writeFileSync(jsOutputFile, prettified);
+  function removeImport(node: any, ...identifiersOrFrom: string[]) {
+    const remove: any[] = [];
+    if (identifiersOrFrom.includes(node.source.value)) {
+      tsOutput.remove(node.start, node.end);
+      return;
     }
-    return name.replace(/\./g, "?.");
-  } else {
-    // this.a -> this.a
-    // this.a.b -> (this.a) ? this.a.b : undefined
-    // this.a.b.c -> (this.a && this.a.b) ? this.a.b.c : undefined
-    // item.foo -> (item) ? item.foo
-    // item.foo.bar -> (item && item.foo) ? item.foo.bar : undefined
-
-    // debug("nullSafe", name, 'using undef',undefinedValue);
-
-    const parts = name.split(".");
-
-    let condition = "";
-    let lastPart = parts.length - 1;
-    if (undefinedValue !== "undefined") {
-      // If using something else than undefined, we should check also the last part of the value and fall back if that is undefined
-      // e.g. item.list -> fallback if `list` is undefined
-      lastPart++;
+    node.specifiers.forEach((specifier) => {
+      if (identifiersOrFrom.includes(specifier?.imported?.name)) {
+        remove.push(specifier);
+      }
+    });
+    if (remove.length === 0) {
+      return;
     }
-
-    for (var i = 1; i <= lastPart; i++) {
-      let accessor = parts[0];
-
-      for (var j = 1; j < i; j++) {
-        accessor += "." + parts[j];
-      }
-
-      if (condition !== "") {
-        condition += " && ";
-      }
-
-      if (!assumedNonNull.includes(accessor)) {
-        condition += accessor;
-      }
-    }
-    if (condition) {
-      const ret = `(${condition}) ? ${name} : ${undefinedValue}`;
-      // debug(ret);
-      return ret;
+    if (remove.length === node.specifiers.length) {
+      // Remove all
+      tsOutput.remove(node.start, node.end);
     } else {
-      return name;
+      error("Unable to remove only part of an import");
+      //FIXME Broken
+      remove.forEach((specifier) => removeIncludingTrailingComma(specifier));
     }
   }
-}
-function prependThisIfNeeded(qualifiedPrefixes: string[], variable: string) {
-  const parts = variable.split(/\./);
-  if (qualifiedPrefixes.includes(parts[0])) {
-    return variable;
+  function rewriteHtmlNode(child: any, resolver: Resolver) {
+    if (child.nodeType === 1) {
+      rewriteElement(child, resolver);
+    } else if (child.nodeType === 3) {
+      rewriteTextNode(child, resolver);
+    } else {
+      warn("unhandled child", child);
+    }
   }
-  return "this." + variable;
-}
-function getSuperClass(superClass: any): string | undefined {
-  if (superClass.type === "CallExpression") {
-    // commonly used for mixins
-    return getSource(superClass).replace("PolymerElement", "LitElement");
-  } else if (superClass.type === "Identifier") {
-    return "LitElement";
-  } else {
-    warn("Unknown super class type", superClass);
+  function replaceWithLitIf(
+    element: any,
+    polymerExpression: string,
+    resolver: Resolver,
+    template: any
+  ) {
+    const expression = polymerExpression.substring(
+      2,
+      polymerExpression.length - 2
+    );
+
+    const litExpression = resolveExpression(expression, true, resolver);
+    template.childNodes.forEach((child) => rewriteElement(child, resolver));
+    const litIf = `\${${litExpression} ? html\`${template.innerHTML}\` : html\`\`}`;
+    element.replaceWith(litIf);
   }
-  return undefined;
+
+  function replaceWithLitRepeat(
+    element: any,
+    polymerItemsExpression: string,
+    outerResolver: Resolver,
+    template: any
+  ) {
+    const expression = polymerItemsExpression.substring(
+      2,
+      polymerItemsExpression.length - 2
+    );
+
+    // debug("expression", expression);
+    const litExpression = resolveExpression(
+      expression,
+      true,
+      outerResolver,
+      "[]"
+    );
+    // debug("litExpression", litExpression);
+
+    const itemResolver = (
+      originalExpression: string,
+      node: any,
+      makeNullSafe: boolean,
+      resolver: Resolver,
+      undefinedValue: string,
+      qualifiedPrefixes
+    ) => {
+      return resolver(
+        originalExpression,
+        node,
+        makeNullSafe,
+        outerResolver,
+        undefinedValue,
+        [...qualifiedPrefixes, "item", "index"]
+      );
+    };
+
+    template.childNodes.forEach((child) => rewriteElement(child, itemResolver));
+
+    const litRepeat = `\${(${litExpression}).map((item, index) => html\`${template.innerHTML}\`)}`;
+    element.replaceWith(litRepeat);
+  }
+  function nullSafe(
+    name: any,
+    assumedNonNull: string[],
+    undefinedValue: string
+  ) {
+    // debug("nullSafe", name);
+    // Polymer allows using "a.b.c" when "a" or "b" is undefined
+    // webpack 4 does not support ?. so to be compati
+    if (useOptionalChaining) {
+      const first = name.split(".")[0];
+      if (assumedNonNull.includes(first)) {
+        return (
+          first + "." + name.substring(first.length + 1).replace(/\./g, "?.")
+        );
+      }
+      return name.replace(/\./g, "?.");
+    } else {
+      // this.a -> this.a
+      // this.a.b -> (this.a) ? this.a.b : undefined
+      // this.a.b.c -> (this.a && this.a.b) ? this.a.b.c : undefined
+      // item.foo -> (item) ? item.foo
+      // item.foo.bar -> (item && item.foo) ? item.foo.bar : undefined
+
+      // debug("nullSafe", name, 'using undef',undefinedValue);
+
+      const parts = name.split(".");
+
+      let condition = "";
+      let lastPart = parts.length - 1;
+      if (undefinedValue !== "undefined") {
+        // If using something else than undefined, we should check also the last part of the value and fall back if that is undefined
+        // e.g. item.list -> fallback if `list` is undefined
+        lastPart++;
+      }
+
+      for (var i = 1; i <= lastPart; i++) {
+        let accessor = parts[0];
+
+        for (var j = 1; j < i; j++) {
+          accessor += "." + parts[j];
+        }
+
+        if (condition !== "") {
+          condition += " && ";
+        }
+
+        if (!assumedNonNull.includes(accessor)) {
+          condition += accessor;
+        }
+      }
+      if (condition) {
+        const ret = `(${condition}) ? ${name} : ${undefinedValue}`;
+        // debug(ret);
+        return ret;
+      } else {
+        return name;
+      }
+    }
+  }
+  function prependThisIfNeeded(qualifiedPrefixes: string[], variable: string) {
+    const parts = variable.split(/\./);
+    if (qualifiedPrefixes.includes(parts[0])) {
+      return variable;
+    }
+    return "this." + variable;
+  }
+  function getSuperClass(superClass: any): string | undefined {
+    if (superClass.type === "CallExpression") {
+      // commonly used for mixins
+      return getSource(superClass).replace("PolymerElement", "LitElement");
+    } else if (superClass.type === "Identifier") {
+      return "LitElement";
+    } else {
+      warn("Unknown super class type", superClass);
+    }
+    return undefined;
+  }
 }
