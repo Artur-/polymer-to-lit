@@ -55,12 +55,13 @@ if (stat.isFile()) {
     process.exit();
   }
 
-  const jarVersion = "0.6-SNAPSHOT";
+  const jarVersion = "0.6.0.rc1";
   const groupId = "org.vaadin.artur";
   const artifactId = "polymer-to-lit";
+  const repo = "-DremoteRepositories=prereleases::default::https://maven.vaadin.com/vaadin-prereleases/";
   console.log("Downloading Java dependencies if needed...");
   try {
-    run(`mvn dependency:get -Dartifact=${groupId}:${artifactId}:${jarVersion}`);
+    run(`mvn dependency:get -Dartifact=${groupId}:${artifactId}:${jarVersion} ${repo}`);
   } catch (e) {
     console.error(e);
     process.exit();
