@@ -7,7 +7,7 @@ import MagicString from "magic-string";
 import * as prettier from "prettier";
 import { inspect } from "util";
 import { resolve } from "path";
-const htmlParse = require("node-html-parser").parse;
+const htmlParse = require("a-node-html-parser").parse;
 const util = require("util");
 
 const assumeBooleanAttributes = ["hidden", "checked"];
