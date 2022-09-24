@@ -83,7 +83,7 @@ if (stat.isFile()) {
   }
 
   try {
-    const result = run(`java -jar ${jarPath} ${inputArg}`);
+    const result = run(`java -jar "${jarPath}" "${inputArg}"`);
 
     console.log(result);
   } catch (e) {
