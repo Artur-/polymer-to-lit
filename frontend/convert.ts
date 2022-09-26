@@ -6,7 +6,7 @@ import * as prettier from "prettier";
 const htmlParse = require("a-node-html-parser").parse;
 import * as glob from "glob";
 import { execSync } from "child_process";
-import { sep as pathSeparator} from "path";
+import { sep as pathSeparator } from "path";
 
 const assumeBooleanAttributes = ["hidden", "checked"];
 
@@ -32,19 +32,24 @@ if (process.argv.includes("-chain")) {
 if (stat.isFile()) {
   convertFile(inputArg, useLit1, useOptionalChaining);
 } else if (stat.isDirectory()) {
-  const vaadinVersion = readPomVersion(inputArg);
+  const vaadinVersion = readVaadinVersion(inputArg);
   if (vaadinVersion && vaadinVersion.startsWith("14.")) {
     useLit1 = true;
   }
 
-  glob(inputArg + "/**/*.js", (err, matches) => {
-    if (err) {
-      console.log("Error listing directory", err);
-      return;
-    }
-    // matches.forEach(match => console.log("match",match));
-    matches.forEach((file) => convertFile(file, useLit1, useOptionalChaining));
-  });
+  const jsFilePattern = inputArg + "/**/*.js";
+  console.log("inputArg", inputArg);
+  console.log("jsFiles", jsFilePattern);
+  try {
+    const jsFiles = glob.sync(jsFilePattern);
+
+    jsFiles
+      .filter((jsFile) => !jsFile.includes("node_modules"))
+      .forEach((file) => convertFile(file, useLit1, useOptionalChaining));
+  } catch (e) {
+    console.error("Error listing directory", e);
+    process.exit();
+  }
 
   // Also convert Java if the needed tools are installed
   try {
@@ -1014,10 +1019,10 @@ function convertFile(
   }
 }
 function run(cmd: string) {
-//  console.log("Running", cmd);
+  //  console.log("Running", cmd);
   return execSync(cmd, { encoding: "utf-8" });
 }
-function readPomVersion(projectFolder: string): string | undefined {
+function readVaadinVersion(projectFolder: string): string | undefined {
   const pomFile = projectFolder + pathSeparator + "pom.xml";
   if (!fs.existsSync(pomFile)) {
     return undefined;
