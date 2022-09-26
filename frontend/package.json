@@ -1,6 +1,6 @@
 {
   "name": "polymer-to-lit",
-  "version": "0.6.5",
+  "version": "0.6.6",
   "description": "A migration tool for Polymer to Lit for selected cases",
   "bin": {
     "convert": "./convert.js"
