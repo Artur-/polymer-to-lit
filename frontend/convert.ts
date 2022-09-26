@@ -6,6 +6,7 @@ import * as prettier from "prettier";
 const htmlParse = require("a-node-html-parser").parse;
 import * as glob from "glob";
 import { execSync } from "child_process";
+import { sep as pathSeparator} from "path";
 
 const assumeBooleanAttributes = ["hidden", "checked"];
 
@@ -18,17 +19,31 @@ if (!inputArg) {
 }
 
 const stat = fs.lstatSync(inputArg);
+let useLit1 = false;
+if (process.argv.includes("-1")) {
+  useLit1 = true;
+}
+
+let useOptionalChaining = false;
+if (process.argv.includes("-chain")) {
+  useOptionalChaining = true;
+}
 
 if (stat.isFile()) {
-  convertFile(inputArg);
+  convertFile(inputArg, useLit1, useOptionalChaining);
 } else if (stat.isDirectory()) {
+  const vaadinVersion = readPomVersion(inputArg);
+  if (vaadinVersion && vaadinVersion.startsWith("14.")) {
+    useLit1 = true;
+  }
+
   glob(inputArg + "/**/*.js", (err, matches) => {
     if (err) {
       console.log("Error listing directory", err);
       return;
     }
     // matches.forEach(match => console.log("match",match));
-    matches.forEach((file) => convertFile(file));
+    matches.forEach((file) => convertFile(file, useLit1, useOptionalChaining));
   });
 
   // Also convert Java if the needed tools are installed
@@ -58,10 +73,13 @@ if (stat.isFile()) {
   const jarVersion = "0.6.0.rc1";
   const groupId = "org.vaadin.artur";
   const artifactId = "polymer-to-lit";
-  const repo = "-DremoteRepositories=prereleases::default::https://maven.vaadin.com/vaadin-prereleases/";
+  const repo =
+    "-DremoteRepositories=prereleases::default::https://maven.vaadin.com/vaadin-prereleases/";
   console.log("Downloading Java dependencies if needed...");
   try {
-    run(`mvn dependency:get -Dartifact=${groupId}:${artifactId}:${jarVersion} ${repo}`);
+    run(
+      `mvn dependency:get -Dartifact=${groupId}:${artifactId}:${jarVersion} ${repo}`
+    );
   } catch (e) {
     console.error(e);
     process.exit();
@@ -74,7 +92,7 @@ if (stat.isFile()) {
     jarPath = run(
       `mvn help:evaluate -q -DforceStdout -Dexpression="settings.localRepository/${groupId.replace(
         /\./g,
-        "/"
+        pathSeparator
       )}/${artifactId}/${jarVersion}/${artifactId}-${jarVersion}.jar"`
     );
   } catch (e) {
@@ -91,14 +109,13 @@ if (stat.isFile()) {
   }
 }
 
-function convertFile(filename: string) {
+function convertFile(
+  filename: string,
+  useLit1: boolean,
+  useOptionalChaining: boolean
+) {
   const jsInputFile = filename;
   let jsOutputFile = jsInputFile;
-  const useOptionalChaining = false;
-  let useLit1 = false;
-  if (process.argv.includes("-1")) {
-    useLit1 = true;
-  }
   const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
   if (!jsContents.includes("PolymerElement")) {
     return;
@@ -999,4 +1016,17 @@ function convertFile(filename: string) {
 function run(cmd: string) {
   console.log("Running", cmd);
   return execSync(cmd, { encoding: "utf-8" });
+}
+function readPomVersion(projectFolder: string): string | undefined {
+  const pomFile = projectFolder + pathSeparator + "pom.xml";
+  if (!fs.existsSync(pomFile)) {
+    return undefined;
+  }
+
+  const pomXml = fs.readFileSync(pomFile, { encoding: "utf-8" });
+  const match = pomXml.match(/<vaadin.version>(.*?)<\/vaadin.version>/);
+  if (match) {
+    return match[1];
+  }
+  return undefined;
 }
