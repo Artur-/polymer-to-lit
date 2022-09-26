@@ -1014,7 +1014,7 @@ function convertFile(
   }
 }
 function run(cmd: string) {
-  console.log("Running", cmd);
+//  console.log("Running", cmd);
   return execSync(cmd, { encoding: "utf-8" });
 }
 function readPomVersion(projectFolder: string): string | undefined {
