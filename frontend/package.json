@@ -16,7 +16,7 @@
   "author": "Artur Signell",
   "license": "Apache-2.0",
   "dependencies": {
-    "a-node-html-parser": "^6.0.0-3",
+    "a-node-html-parser": "^6.0.0-4",
     "acorn": "^7.1.0",
     "acorn-walk": "^8.2.0",
     "glob": "^8.0.3",
