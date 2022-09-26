@@ -1,8 +1,0 @@
-#!/bin/bash
-
-node_modules/.bin/tsc convert.ts 
-for a in `find /Users/artur/test/bakery-app-starter-flow-spring/frontend -name "*.js"`
-do 
-  echo $a 
-  node convert.js $a -1 -o 
-done
