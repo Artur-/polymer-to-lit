@@ -28,9 +28,12 @@ let useOptionalChaining = false;
 if (process.argv.includes("-chain")) {
   useOptionalChaining = true;
 }
-
+let outputSuffix = "";
+if (process.argv.includes("-out")) {
+  outputSuffix = ".out.js";
+}
 if (stat.isFile()) {
-  convertFile(inputArg, useLit1, useOptionalChaining);
+  convertFile(inputArg, useLit1, useOptionalChaining, outputSuffix);
 } else if (stat.isDirectory()) {
   const vaadinVersion = readVaadinVersion(inputArg);
   if (vaadinVersion && vaadinVersion.startsWith("14.")) {
@@ -45,7 +48,9 @@ if (stat.isFile()) {
 
     jsFiles
       .filter((jsFile) => !jsFile.includes("node_modules"))
-      .forEach((file) => convertFile(file, useLit1, useOptionalChaining));
+      .forEach((file) =>
+        convertFile(file, useLit1, useOptionalChaining, outputSuffix)
+      );
   } catch (e) {
     console.error("Error listing directory", e);
     process.exit();
@@ -114,13 +119,80 @@ if (stat.isFile()) {
   }
 }
 
+type BindingOrText = {
+  type: "text" | "oneway" | "twoway";
+  value: string;
+};
+
+function char(str: string, i: number): string | undefined {
+  if (i >= str.length) {
+    return undefined;
+  }
+  return str.charAt(i);
+}
+function splitExpression(expression: string): BindingOrText[] {
+  let current: BindingOrText | undefined;
+  const result: BindingOrText[] = [];
+
+  for (var i = 0; i < expression.length; i++) {
+    if (!current || current.type === "text") {
+      if (char(expression, i) === "[" && char(expression, i + 1) === "[") {
+        // Oneway start
+        if (current) {
+          result.push(current);
+        }
+        current = { type: "oneway", value: "" };
+        i++;
+      } else if (
+        char(expression, i) === "{" &&
+        char(expression, i + 1) === "{"
+      ) {
+        // Twoway start
+        if (current) {
+          result.push(current);
+        }
+        current = { type: "twoway", value: "" };
+        i++;
+      } else {
+        if (!current) {
+          current = { type: "text", value: "" };
+        }
+        current.value += char(expression, i);
+      }
+    } else {
+      // Inside a binding
+      if (
+        current.type === "oneway" &&
+        char(expression, i) === "]" &&
+        char(expression, i + 1) === "]"
+      ) {
+        result.push(current);
+        i++;
+        current = undefined;
+      } else if (
+        current.type === "twoway" &&
+        char(expression, i) === "}" &&
+        char(expression, i + 1) === "}"
+      ) {
+        result.push(current);
+        i++;
+        current = undefined;
+      } else {
+        current.value += char(expression, i);
+      }
+    }
+  }
+  return result;
+}
+
 function convertFile(
   filename: string,
   useLit1: boolean,
-  useOptionalChaining: boolean
+  useOptionalChaining: boolean,
+  outputSuffix: string
 ) {
   const jsInputFile = filename;
-  let jsOutputFile = jsInputFile;
+  let jsOutputFile = jsInputFile + outputSuffix;
   const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
   if (!jsContents.includes("PolymerElement")) {
     return;
@@ -544,12 +616,13 @@ function convertFile(
           element.removeAttribute(key);
           element.setAttribute("@" + eventName, `\${this.${eventHandler}}`);
         } else if (
-          (value.startsWith("[[") && value.endsWith("]]")) ||
-          (value.startsWith("{{") && value.endsWith("}}"))
+          (value.includes("[[") && value.includes("]]")) ||
+          (value.includes("{{") && value.includes("}}"))
         ) {
-          const twoWay = value.startsWith("{{");
+          // Expression can be either "[[foo]]"" or a combined expression like "{{helloText}} [[worldText]]"
 
-          const expression = value.substring(2, value.length - 2);
+          const expressions = splitExpression(value);
+
           if (key.endsWith("$")) {
             // attribute binding prop$="[[foo]]" => prop=${this.foo}
             let attributeKey = key.substring(0, key.length - 1);
@@ -562,7 +635,7 @@ function convertFile(
             }
             element.setAttribute(
               attributeKey,
-              "${" + resolveExpression(expression, true, resolver) + "}"
+              "${" + resolveExpressions(expressions, true, resolver) + "}"
             );
             element.removeAttribute(key);
           } else {
@@ -571,17 +644,17 @@ function convertFile(
             // debug("Rewrite prop: ", key, value);
             element.setAttribute(
               "." + key,
-              "${" + resolveExpression(expression, true, resolver) + "}"
+              "${" + resolveExpressions(expressions, true, resolver) + "}"
             );
             element.removeAttribute(key);
           }
 
-          if (twoWay) {
+          if (expressions.length === 1 && expressions[0].type === "twoway") {
             // @value-change=${(e) => (this.name = e.target.value)}
             const eventName = key + "-changed";
             const attributeKey = "@" + eventName;
-            const attributeValue = `\${(e) => (${resolveExpression(
-              expression,
+            const attributeValue = `\${(e) => (${resolveExpressions(
+              expressions,
               false,
               resolver
             )} = e.target.value)}`;
@@ -735,6 +808,38 @@ function convertFile(
     tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
   }
 
+  function resolveExpressions(
+    expressions: BindingOrText[],
+    makeNullSafe: boolean,
+    resolver: Resolver,
+    undefinedValue: string = "undefined",
+    qualifiedPrefixes: string[] = ["this"]
+  ) {
+    // result is used inside ${ }
+    // abc -> "abc"
+    // [[abc]] -> this.abc
+    // abc[[abc]] -> "abc"+this.abc
+    const resolved = expressions.map((bindingOrText) => {
+      if (bindingOrText.type === "text") {
+        return `'${bindingOrText.value}'`;
+      } else {
+        return (
+          "(" +
+          resolveExpression(
+            bindingOrText.value,
+            makeNullSafe,
+            resolver,
+            undefinedValue,
+            qualifiedPrefixes
+          ) +
+          ")"
+        );
+      }
+    });
+
+    const result = resolved.join("+");
+    return result;
+  }
   function resolveExpression(
     expression: string,
     makeNullSafe: boolean,
