@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-import * as fs from "fs";
 import * as acorn from "acorn";
+import { execSync } from "child_process";
+import * as fs from "fs";
+import * as glob from "glob";
 import MagicString from "magic-string";
+import { sep as pathSeparator } from "path";
 import * as prettier from "prettier";
 const htmlParse = require("a-node-html-parser").parse;
-import * as glob from "glob";
-import { execSync } from "child_process";
-import { sep as pathSeparator } from "path";
 
 const assumeBooleanAttributes = ["hidden", "checked"];
 
@@ -819,6 +819,17 @@ function convertFile(
     // abc -> "abc"
     // [[abc]] -> this.abc
     // abc[[abc]] -> "abc"+this.abc
+
+    if (expressions.length === 1) {
+      return resolveExpression(
+        expressions[0].value,
+        makeNullSafe,
+        resolver,
+        undefinedValue,
+        qualifiedPrefixes
+      );
+    }
+
     const resolved = expressions.map((bindingOrText) => {
       if (bindingOrText.type === "text") {
         return `'${bindingOrText.value}'`;
@@ -829,7 +840,7 @@ function convertFile(
             bindingOrText.value,
             makeNullSafe,
             resolver,
-            undefinedValue,
+            "''", // Use "" so concatenation does not write 'undefined'. Maybe it should be used for other bindings also...
             qualifiedPrefixes
           ) +
           ")"
