@@ -6,5 +6,5 @@ do
   F=`echo $file|sed "s#in/##"|sed "s/.js//"`
   echo $F 
   node ../frontend/convert.js in/$F.js -out
-  diff in/$F.out.js expected/$F.js -wu 
+  diff $file.out.js expected/$F.js -wu 
 done

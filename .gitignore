@@ -1,5 +1,5 @@
 .DS_Store
 node_modules/
-frontend/in/*.out.js
+frontend-test/in/*.out.js
 convert.js
 *~
