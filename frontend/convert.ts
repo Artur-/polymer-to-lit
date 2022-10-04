@@ -742,17 +742,21 @@ function convertFile(
     undefinedValue: string = "undefined",
     qualifiedPrefixes: string[] = ["this"]
   ) {
-    const expr: any = (acorn.parse(expression) as any).body[0];
-    // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
+    try {
+      const expr: any = (acorn.parse(expression) as any).body[0];
+      // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
 
-    return resolver(
-      expression,
-      expr,
-      makeNullSafe,
-      resolver,
-      undefinedValue,
-      qualifiedPrefixes
-    );
+      return resolver(
+        expression,
+        expr,
+        makeNullSafe,
+        resolver,
+        undefinedValue,
+        qualifiedPrefixes
+      );
+    } catch (e) {
+      throw new Error("Unable to parse expression: " + expression);
+    }
   }
   function baseResolver(
     originalExpression: string,
