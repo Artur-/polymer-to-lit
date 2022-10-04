@@ -732,7 +732,17 @@ function convertFile(
       removeImport(node, "html", "PolymerElement");
       removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
       removeImport(node, "@polymer/polymer/lib/elements/dom-repeat.js");
-    } else if (!getSource(node).includes("customElements.define")) {
+    } else if (node.type === "ExportNamedDeclaration") {
+      // export class foobar
+      if (node.declaration.type === "ClassDeclaration") {
+        modifyClass(node.declaration, baseResolver);
+      } else {
+        warn("Unhandled root node", node.type, getSource(node));
+      }
+    } else if (
+      !getSource(node).includes("customElements.define") &&
+      !getSource(node).includes("window.Vaadin.")
+    ) {
       warn("Unhandled root node", node.type, getSource(node));
     }
   }
