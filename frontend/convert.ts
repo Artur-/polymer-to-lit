@@ -156,6 +156,7 @@ if (stat.isFile()) {
 type BindingOrText = {
   type: "text" | "oneway" | "twoway";
   value: string;
+  event?: string; // For two-way binding, the event to listen to (e.g., "input", "change")
 };
 
 function char(str: string, i: number): string | undefined {
@@ -208,6 +209,15 @@ function splitExpression(expression: string): BindingOrText[] {
         char(expression, i) === "}" &&
         char(expression, i + 1) === "}"
       ) {
+        // Check if the value contains ::event syntax
+        const colonIndex = current.value.indexOf('::');
+        if (colonIndex > -1) {
+          // Split the property name and event
+          const propertyName = current.value.substring(0, colonIndex);
+          const eventName = current.value.substring(colonIndex + 2);
+          current.value = propertyName;
+          current.event = eventName;
+        }
         result.push(current);
         i++;
         current = undefined;
@@ -832,14 +842,41 @@ function convertFile(
           }
 
           if (expressions.length === 1 && expressions[0].type === "twoway") {
-            // @value-change=${(e) => (this.name = e.target.value)}
-            const eventName = key + "-changed";
+            // For two-way binding, add an event listener
+            const expr = expressions[0];
+            const customEvent = expr.event;
+            
+            // Determine the event to listen to
+            let eventName: string;
+            let valueGetter: string;
+            
+            if (customEvent) {
+              // Custom event specified with :: syntax (e.g., {{value::input}})
+              eventName = customEvent;
+              // For custom events specified with ::, use e.target.value by default
+              valueGetter = key === "checked" ? "e.target.checked" : "e.target.value";
+            } else {
+              // Standard Polymer two-way binding always uses property-changed events
+              // e.g., {{value}} listens for value-changed, {{name}} listens for name-changed
+              eventName = key + "-changed";
+              // 1:1 conversion - for most properties use e.target.value to match Polymer behavior
+              if (key === "checked") {
+                valueGetter = "e.target.checked";
+              } else if (key === "value" || key === "href") {
+                // Common properties that would use e.target.value
+                valueGetter = "e.target.value";
+              } else {
+                // For other properties, access them directly
+                valueGetter = `e.target.${key}`;
+              }
+            }
+            
             const attributeKey = "@" + eventName;
             const attributeValue = `\${(e) => (${resolveExpressions(
               expressions,
               false,
               resolver
-            )} = e.target.value)}`;
+            )} = ${valueGetter})}`;
             element.setAttribute(attributeKey, attributeValue);
           }
         }
@@ -1042,12 +1079,21 @@ function convertFile(
     undefinedValue: string = "undefined",
     qualifiedPrefixes: string[] = ["this"]
   ) {
+    // Handle Polymer wildcard syntax for array/object observers
+    // Replace all occurrences of .* and .splices in the expression
+    // e.g., "_computeSum(items, items.*)" becomes "_computeSum(items, items)"
+    // e.g., "items.*" becomes "items"
+    // e.g., "items.splices" becomes "items"
+    const cleanedExpression = expression
+      .replace(/(\w+)\.\*/g, '$1')  // Replace word.* with word
+      .replace(/(\w+)\.splices/g, '$1'); // Replace word.splices with word
+    
     try {
-      const expr: any = (acorn.parse(expression, { ecmaVersion: 2020 }) as any).body[0];
+      const expr: any = (acorn.parse(cleanedExpression, { ecmaVersion: 2020 }) as any).body[0];
       // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
 
       return resolver(
-        expression,
+        cleanedExpression,
         expr,
         makeNullSafe,
         resolver,
@@ -1056,10 +1102,10 @@ function convertFile(
       );
     } catch (e) {
       if (debug) {
-        console.error("Unable to parse expression: " + expression + " - " + e.message);
+        console.error("Unable to parse expression: " + cleanedExpression + " - " + e.message);
       }
-      // Return the expression as-is if we can't parse it
-      return expression;
+      // Return the cleaned expression as-is if we can't parse it
+      return cleanedExpression;
     }
   }
   function baseResolver(
