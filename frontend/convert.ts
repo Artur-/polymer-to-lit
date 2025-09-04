@@ -18,7 +18,13 @@ if (!inputArg) {
   process.exit();
 }
 
-const stat = fs.lstatSync(inputArg);
+let stat: fs.Stats;
+try {
+  stat = fs.lstatSync(inputArg);
+} catch (error) {
+  console.error(`Error: Cannot access "${inputArg}": ${error.message}`);
+  process.exit(1);
+}
 let useLit1 = false;
 if (process.argv.includes("-1")) {
   useLit1 = true;
@@ -193,14 +199,27 @@ function convertFile(
 ) {
   const jsInputFile = filename;
   let jsOutputFile = jsInputFile + outputSuffix;
-  const jsContents = fs.readFileSync(jsInputFile, { encoding: "utf-8" });
+  let jsContents: string;
+  try {
+    jsContents = fs.readFileSync(jsInputFile, { encoding: "utf-8" });
+  } catch (error) {
+    console.error(`Error reading file ${jsInputFile}: ${error.message}`);
+    return;
+  }
+  
   if (!jsContents.includes("PolymerElement")) {
     return;
   }
   console.log("Processing " + jsInputFile);
 
   const tsOutput: MagicString = new MagicString(jsContents);
-  const polymerJs = acorn.parse(jsContents, { sourceType: "module", ecmaVersion: 2020 });
+  let polymerJs: any;
+  try {
+    polymerJs = acorn.parse(jsContents, { sourceType: "module", ecmaVersion: 2020 });
+  } catch (error) {
+    console.error(`Error parsing JavaScript in ${jsInputFile}: ${error.message}`);
+    return;
+  }
   const initValues: any[] = [];
   const computedProperties: any[] = [];
   const observedProperties: any[] = [];
@@ -673,13 +692,19 @@ function convertFile(
     //  if (inputHtml.includes("}}")) {
     //   throw "Template contains two way bindings which are not supported";
     // }
-    const root = htmlParse(inputHtml, {
-      lowerCaseTagName: true,
-      script: true,
-      style: true,
-      pre: true,
-      comment: true,
-    });
+    let root;
+    try {
+      root = htmlParse(inputHtml, {
+        lowerCaseTagName: true,
+        script: true,
+        style: true,
+        pre: true,
+        comment: true,
+      });
+    } catch (err) {
+      error("Failed to parse HTML template", err);
+      return { htmls: [inputHtml], styles: [], styleIncludes: [] };
+    }
     // debug(root.innerHTML);
     const htmls: string[] = [];
     const styles: string[] = [];
@@ -734,10 +759,12 @@ function convertFile(
       removeImport(node, "@polymer/polymer/lib/elements/dom-repeat.js");
     } else if (node.type === "ExportNamedDeclaration") {
       // export class foobar
-      if (node.declaration.type === "ClassDeclaration") {
+      if (node.declaration && node.declaration.type === "ClassDeclaration") {
         modifyClass(node.declaration, baseResolver);
+      } else if (node.declaration) {
+        warn("Unhandled export declaration type", node.declaration.type, getSource(node));
       } else {
-        warn("Unhandled root node", node.type, getSource(node));
+        warn("Export declaration without declaration", getSource(node));
       }
     } else if (
       !getSource(node).includes("customElements.define") &&
@@ -881,7 +908,9 @@ function convertFile(
         qualifiedPrefixes
       );
     } catch (e) {
-      throw new Error("Unable to parse expression: " + expression);
+      console.error("Unable to parse expression: " + expression + " - " + e.message);
+      // Return the expression as-is if we can't parse it
+      return expression;
     }
   }
   function baseResolver(
@@ -933,18 +962,24 @@ function convertFile(
         ")"
       );
     } else if (expr.type === "CallExpression") {
-      const args = expr.arguments
-        .map((argument) =>
-          resolve(
-            originalExpression,
-            argument,
-            makeNullSafe,
-            resolve,
-            undefinedValue,
-            qualifiedPrefixes
+      let args = "";
+      try {
+        args = expr.arguments
+          .map((argument) =>
+            resolve(
+              originalExpression,
+              argument,
+              makeNullSafe,
+              resolve,
+              undefinedValue,
+              qualifiedPrefixes
+            )
           )
-        )
-        .join(", ");
+          .join(", ");
+      } catch (error) {
+        warn("Error resolving function arguments", error);
+        args = "";
+      }
       const caller = resolve(
         originalExpression,
         expr.callee,
@@ -974,13 +1009,23 @@ function convertFile(
     /this\.\$\.([^;., ()]*)/g,
     `this.renderRoot.querySelector("#$1")`
   );
-  const prettified = prettier.format(output, {
+  prettier.format(output, {
     parser: "typescript",
   }).then((formatted) => {
-    fs.writeFileSync(jsOutputFile, formatted);
+    try {
+      fs.writeFileSync(jsOutputFile, formatted);
+      console.log(`Successfully converted ${jsInputFile} to ${jsOutputFile}`);
+    } catch (error) {
+      console.error(`Error writing file ${jsOutputFile}: ${error.message}`);
+    }
   }).catch((err) => {
     console.error("Prettier formatting failed:", err);
-    fs.writeFileSync(jsOutputFile, output);
+    try {
+      fs.writeFileSync(jsOutputFile, output);
+      console.log(`Converted ${jsInputFile} to ${jsOutputFile} (without formatting)`);
+    } catch (error) {
+      console.error(`Error writing file ${jsOutputFile}: ${error.message}`);
+    }
   });
   function removeImport(node: any, ...identifiersOrFrom: string[]) {
     const remove: any[] = [];
