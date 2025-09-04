@@ -1211,14 +1211,40 @@ function convertFile(
     resolver: Resolver,
     template: any
   ) {
+    if (!polymerExpression) {
+      warn("dom-if without if attribute");
+      return;
+    }
+    
+    // Extract the expression from [[...]] or {{...}}
     const expression = polymerExpression.substring(
       2,
       polymerExpression.length - 2
     );
 
+    debugLog(`Converting dom-if with expression: ${expression}`);
+    
+    // Resolve the condition expression
     const litExpression = resolveExpression(expression, true, resolver);
+    
+    // Process child nodes first
     template.childNodes.forEach((child) => rewriteElement(child, resolver));
-    const litIf = `\${${litExpression} ? html\`${template.innerHTML}\` : html\`\`}`;
+    
+    // Get the inner content and handle whitespace properly
+    const innerContent = template.innerHTML;
+    
+    // Check if the inner content is empty or just whitespace
+    if (!innerContent || !innerContent.trim()) {
+      debugLog("Empty dom-if template, replacing with empty string");
+      element.replaceWith('');
+      return;
+    }
+    
+    // Create the conditional rendering
+    // Use proper spacing to maintain readability
+    const litIf = `\${${litExpression} ? html\`${innerContent}\` : html\`\`}`;
+    
+    verboseLog(`Converted dom-if to: ${litIf.substring(0, 50)}...`);
     element.replaceWith(litIf);
   }
 
