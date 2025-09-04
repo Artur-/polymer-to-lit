@@ -197,19 +197,58 @@ function convertFile(
   useOptionalChaining: boolean,
   outputSuffix: string
 ) {
+  // Validate input file
+  if (!filename || typeof filename !== 'string') {
+    console.error('Error: Invalid filename provided');
+    return;
+  }
+  
+  if (!filename.endsWith('.js')) {
+    console.warn(`Warning: ${filename} is not a .js file, skipping`);
+    return;
+  }
+  
   const jsInputFile = filename;
   let jsOutputFile = jsInputFile + outputSuffix;
+  
+  // Check if file exists and is readable
+  if (!fs.existsSync(jsInputFile)) {
+    console.error(`Error: File ${jsInputFile} does not exist`);
+    return;
+  }
+  
   let jsContents: string;
   try {
+    const stats = fs.statSync(jsInputFile);
+    if (!stats.isFile()) {
+      console.error(`Error: ${jsInputFile} is not a file`);
+      return;
+    }
+    if (stats.size === 0) {
+      console.warn(`Warning: ${jsInputFile} is empty, skipping`);
+      return;
+    }
+    if (stats.size > 10 * 1024 * 1024) { // 10MB limit
+      console.warn(`Warning: ${jsInputFile} is very large (${Math.round(stats.size / 1024 / 1024)}MB), this may take a while`);
+    }
+    
     jsContents = fs.readFileSync(jsInputFile, { encoding: "utf-8" });
   } catch (error) {
     console.error(`Error reading file ${jsInputFile}: ${error.message}`);
     return;
   }
   
+  // Check if it's a Polymer file
   if (!jsContents.includes("PolymerElement")) {
     return;
   }
+  
+  // Validate output file path
+  if (jsOutputFile === jsInputFile) {
+    console.error(`Error: Output file would overwrite input file. Use -out flag to specify a different output suffix.`);
+    return;
+  }
+  
   console.log("Processing " + jsInputFile);
 
   const tsOutput: MagicString = new MagicString(jsContents);
@@ -242,7 +281,11 @@ function convertFile(
   }
   const body = (polymerJs as any).body;
   const modifyClass = (node: any, resolve: Resolver) => {
-    const className = node.id.name;
+    const className = node.id?.name;
+    if (!className) {
+      warn("Class node missing id.name");
+      return;
+    }
     const parentClass = node.superClass;
     let tag = "";
     let template = "";
@@ -260,10 +303,14 @@ function convertFile(
     for (const classContent of node.body.body) {
       if (
         classContent.type == "MethodDefinition" &&
-        classContent.key.name == "template"
+        classContent.key?.name == "template"
       ) {
         // Replace the whole template() method
-        const taggedTemplate = classContent.value.body.body[0].argument;
+        const taggedTemplate = classContent.value?.body?.body?.[0]?.argument;
+        if (!taggedTemplate || !taggedTemplate.quasi?.quasis?.[0]?.value?.raw) {
+          warn("Invalid template structure");
+          return;
+        }
         template = taggedTemplate.quasi.quasis[0].value.raw;
         const modifiedTemplate = modifyTemplate(template);
 
@@ -307,9 +354,9 @@ function convertFile(
         );
       } else if (
         classContent.type == "MethodDefinition" &&
-        classContent.key.name == "is"
+        classContent.key?.name == "is"
       ) {
-        tag = classContent.value.body.body[0].argument.value;
+        tag = classContent.value?.body?.body?.[0]?.argument?.value || '';
         // debug(getSource(classContent));
       } else if (
         classContent.type == "MethodDefinition" &&
@@ -471,7 +518,11 @@ function convertFile(
   };
 
   const removeIncludingTrailingComma = (node) => {
-    if (jsContents.substring(node.end, node.end + 1) === ",") {
+    if (!node || typeof node.start !== 'number' || typeof node.end !== 'number') {
+      warn("Invalid node provided to removeIncludingTrailingComma");
+      return;
+    }
+    if (node.end < jsContents.length && jsContents.substring(node.end, node.end + 1) === ",") {
       tsOutput.remove(node.start, node.end + 1);
     } else {
       tsOutput.remove(node.start, node.end);
@@ -689,6 +740,12 @@ function convertFile(
     }
   };
   const modifyTemplate = (inputHtml) => {
+    // Validate HTML input
+    if (!inputHtml || typeof inputHtml !== 'string') {
+      warn("Invalid or empty HTML template");
+      return { htmls: [], styles: [], styleIncludes: [] };
+    }
+    
     //  if (inputHtml.includes("}}")) {
     //   throw "Template contains two way bindings which are not supported";
     // }
@@ -1124,6 +1181,13 @@ function convertFile(
     assumedNonNull: string[],
     undefinedValue: string
   ) {
+    // Validate inputs
+    if (!name || typeof name !== 'string') {
+      return undefinedValue;
+    }
+    if (!Array.isArray(assumedNonNull)) {
+      assumedNonNull = [];
+    }
     // debug("nullSafe", name);
     // Polymer allows using "a.b.c" when "a" or "b" is undefined
     // webpack 4 does not support ?. so to be compati
@@ -1179,6 +1243,13 @@ function convertFile(
     }
   }
   function prependThisIfNeeded(qualifiedPrefixes: string[], variable: string) {
+    // Validate inputs
+    if (!variable || typeof variable !== 'string') {
+      return "this." + (variable || '');
+    }
+    if (!Array.isArray(qualifiedPrefixes)) {
+      qualifiedPrefixes = ["this"];
+    }
     const parts = variable.split(/\./);
     if (qualifiedPrefixes.includes(parts[0])) {
       return variable;

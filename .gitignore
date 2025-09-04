@@ -7,4 +7,4 @@ test-*
 java-test
 java/.vscode
 java/target
-frontend/jt-designer-view.js
+frontend/jt-*
