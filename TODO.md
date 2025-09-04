@@ -98,10 +98,10 @@
 
 Based on the test suite, these areas need improvement:
 
-### Two-Way Binding Issues
-- [ ] `{{value::event}}` syntax not properly converted
-- [ ] Event part (::input, ::change, etc.) incorrectly kept in template literals
-- [ ] Custom event handlers for two-way binding need proper conversion
+### Two-Way Binding Issues ✅
+- [x] `{{value::event}}` syntax properly converted
+- [x] Event part (::input, ::change, etc.) correctly handled
+- [x] Custom event handlers for two-way binding properly converted
 
 ### dom-repeat Issues ✅
 - [x] Filter attribute not properly converted
@@ -109,11 +109,12 @@ Based on the test suite, these areas need improvement:
 - [x] Index-as and as attributes need special handling
 - [x] Nested dom-repeat context issues
 
-### Array Mutation Methods
-- [ ] `push()`, `pop()`, `shift()`, `unshift()` need conversion
-- [ ] `splice()` method needs conversion
+### Array Mutation Methods (Partial)
+- [x] Wildcard syntax `items.*` and `items.splices` properly handled
+- [ ] `push()`, `pop()`, `shift()`, `unshift()` need conversion to Lit patterns
+- [ ] `splice()` method needs conversion to Lit patterns
 - [ ] `set()` method for array items needs conversion
-- [ ] Array splice observers not supported
+- [ ] Array splice observers not fully supported in Lit
 
 ### Complex Observers
 - [ ] Multiple property observers not fully supported
@@ -134,11 +135,11 @@ Based on the test suite, these areas need improvement:
    - [x] Fix export patterns
 
 2. **High** (Core Functionality):
-   - Fix two-way binding conversion
+   - ~~Fix two-way binding conversion~~ ✅
    - ~~Improve dom-repeat handling~~ ✅
    - ~~Improve dom-if handling~~ ✅
    - Better property conversion
-   - Fix array mutation methods
+   - Fix array mutation methods (partially done)
 
 3. **Medium** (Robustness):
    - Complex observers support
