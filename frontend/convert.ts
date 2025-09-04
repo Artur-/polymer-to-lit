@@ -296,11 +296,7 @@ function convertFile(
     console.error(`Error parsing JavaScript in ${jsInputFile}: ${error.message}`);
     return;
   }
-  const initValues: any[] = [];
-  const computedProperties: any[] = [];
-  const observedProperties: any[] = [];
-  let valueInitPosition = -1;
-  let newMethodInjectPosition = -1;
+  // Global flags for imports
   let usesRepeat = false;
   let usesHeaderRenderer = false;
   let usesBodyRenderer = false;
@@ -336,8 +332,13 @@ function convertFile(
     const parentClass = node.superClass;
     let tag = "";
     let template = "";
-
-    newMethodInjectPosition = node.body.end - 1;
+    
+    // Per-class variables
+    const initValues: any[] = [];
+    const computedProperties: any[] = [];
+    const observedProperties: any[] = [];
+    let valueInitPosition = -1;
+    let newMethodInjectPosition = node.body.end - 1;
 
     // extends PolymerElement -> extends LitElement
     const newSuper = getSuperClass(node.superClass);
@@ -562,6 +563,61 @@ function convertFile(
       // myProperty = false;
       // debug(getSource(classContent));
     }
+    
+    // Process property initializations, computed properties, and observers
+    const valueInitCode = initValues
+      .map((initValue) => {
+        return `this.${initValue.name} = ${initValue.value};`;
+      })
+      .join("\n");
+
+    const computedPropertiesCode = computedProperties
+      .map((computedProperty) => {
+        return `get ${computedProperty.name}() {
+        return ${computedProperty.value};
+      }`;
+      })
+      .join("\n");
+
+    const observedPropertiesCode = observedProperties
+      .map((observedProperty) => {
+        const variable = observedProperty.name;
+        const observer = observedProperty.value;
+        return `set ${variable}(newValue) {
+        const oldValue = this.${variable};
+        this._${variable} = newValue;
+        if (oldValue !== newValue) {
+          this.${observer}(newValue, oldValue);
+          this.requestUpdateInternal("${variable}", oldValue, this.constructor.properties.${variable});
+        }
+      }
+      get ${variable}() {
+        return this._${variable};
+      }
+    `;
+      })
+      .join("\n");
+      
+    if (valueInitCode.length != 0) {
+      if (valueInitPosition !== -1) {
+        tsOutput.prependRight(valueInitPosition, valueInitCode);
+      } else {
+        // No constructor
+        const constructorCode = `constructor() {
+          super();
+          ${valueInitCode}
+        }`;
+        tsOutput.prependRight(newMethodInjectPosition, constructorCode);
+      }
+    }
+
+    if (observedPropertiesCode.length != 0) {
+      tsOutput.prependRight(newMethodInjectPosition, observedPropertiesCode);
+    }
+    if (computedPropertiesCode.length != 0) {
+      tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
+    }
+    
     return { className, parentClass, template, tag };
   };
 
@@ -865,13 +921,38 @@ function convertFile(
       removeImport(node, "@polymer/polymer/lib/elements/dom-if.js");
       removeImport(node, "@polymer/polymer/lib/elements/dom-repeat.js");
     } else if (node.type === "ExportNamedDeclaration") {
-      // export class foobar
+      // Handle different export patterns
       if (node.declaration && node.declaration.type === "ClassDeclaration") {
+        // export class ClassName
+        verboseLog("Processing export class declaration");
         modifyClass(node.declaration, baseResolver);
+      } else if (node.specifiers && node.specifiers.length > 0) {
+        // export { ClassName } or export { ClassName as Something }
+        verboseLog(`Processing named export with ${node.specifiers.length} specifiers`);
+        // These exports are fine to keep as-is for Lit components
+        // No modification needed, just log for debugging
+        node.specifiers.forEach((spec: any) => {
+          debugLog(`Export specifier: ${spec.local?.name || 'unknown'} ${spec.exported ? `as ${spec.exported.name}` : ''}`);
+        });
       } else if (node.declaration) {
+        // Other export declarations (variables, functions, etc.)
         warn("Unhandled export declaration type", node.declaration.type, getSource(node));
       } else {
-        warn("Export declaration without declaration", getSource(node));
+        // Export without declaration or specifiers (shouldn't normally happen)
+        warn("Export declaration without declaration or specifiers", getSource(node));
+      }
+    } else if (node.type === "ExportDefaultDeclaration") {
+      // Handle export default patterns
+      if (node.declaration.type === "ClassDeclaration") {
+        // export default class ClassName
+        verboseLog("Processing export default class declaration");
+        modifyClass(node.declaration, baseResolver);
+      } else if (node.declaration.type === "Identifier") {
+        // export default ClassName
+        verboseLog(`Processing export default identifier: ${node.declaration.name}`);
+        // This is fine for Lit components, no modification needed
+      } else {
+        warn("Unhandled export default type", node.declaration.type, getSource(node));
       }
     } else if (
       !getSource(node).includes("customElements.define") &&
@@ -901,58 +982,6 @@ function convertFile(
     tsOutput.prepend(
       `import { ${usedRenderers.join(", ")} } from "@vaadin/grid/lit.js";\n`
     );
-  }
-
-  const valueInitCode = initValues
-    .map((initValue) => {
-      return `this.${initValue.name} = ${initValue.value};`;
-    })
-    .join("\n");
-
-  const computedPropertiesCode = computedProperties
-    .map((computedProperty) => {
-      return `get ${computedProperty.name}() {
-      return ${computedProperty.value};
-    }`;
-    })
-    .join("\n");
-
-  const observedPropertiesCode = observedProperties
-    .map((observedProperty) => {
-      const variable = observedProperty.name;
-      const observer = observedProperty.value;
-      return `set ${variable}(newValue) {
-      const oldValue = this.${variable};
-      this._${variable} = newValue;
-      if (oldValue !== newValue) {
-        this.${observer}(newValue, oldValue);
-        this.requestUpdateInternal("${variable}", oldValue, this.constructor.properties.${variable});
-      }
-    }
-    get ${variable}() {
-      return this._${variable};
-    }
-  `;
-    })
-    .join("\n");
-  if (valueInitCode.length != 0) {
-    if (valueInitPosition !== -1) {
-      tsOutput.prependRight(valueInitPosition, valueInitCode);
-    } else {
-      // No constructor
-      const constructorCode = `constructor() {
-        super();
-        ${valueInitCode}
-      }`;
-      tsOutput.prependRight(newMethodInjectPosition, constructorCode);
-    }
-  }
-
-  if (observedPropertiesCode.length != 0) {
-    tsOutput.prependRight(newMethodInjectPosition, observedPropertiesCode);
-  }
-  if (computedPropertiesCode.length != 0) {
-    tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
   }
 
   function resolveExpressions(
