@@ -53,8 +53,8 @@
 - [ ] Fix observer pattern conversion
 
 ### 9. Template Features
-- [ ] Better support for conditional templates (dom-if)
-- [ ] Improve repeat template handling (dom-repeat)
+- [x] Better support for conditional templates (dom-if) ✅
+- [x] Improve repeat template handling (dom-repeat) ✅
 - [ ] Fix slot conversion
 - [ ] Handle custom template directives
 
@@ -103,11 +103,11 @@ Based on the test suite, these areas need improvement:
 - [ ] Event part (::input, ::change, etc.) incorrectly kept in template literals
 - [ ] Custom event handlers for two-way binding need proper conversion
 
-### dom-repeat Issues  
-- [ ] Filter attribute not properly converted
-- [ ] Sort attribute not properly converted
-- [ ] Index-as and as attributes need special handling
-- [ ] Nested dom-repeat context issues
+### dom-repeat Issues ✅
+- [x] Filter attribute not properly converted
+- [x] Sort attribute not properly converted
+- [x] Index-as and as attributes need special handling
+- [x] Nested dom-repeat context issues
 
 ### Array Mutation Methods
 - [ ] `push()`, `pop()`, `shift()`, `unshift()` need conversion
@@ -135,7 +135,8 @@ Based on the test suite, these areas need improvement:
 
 2. **High** (Core Functionality):
    - Fix two-way binding conversion
-   - Improve dom-repeat handling
+   - ~~Improve dom-repeat handling~~ ✅
+   - ~~Improve dom-if handling~~ ✅
    - Better property conversion
    - Fix array mutation methods
 
