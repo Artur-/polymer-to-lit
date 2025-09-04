@@ -3,3 +3,8 @@ node_modules/
 frontend-test/in/*.out.js
 convert.js
 *~
+test-*
+java-test
+java/.vscode
+java/target
+frontend/jt-designer-view.js

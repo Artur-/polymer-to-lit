@@ -193,14 +193,14 @@ function convertFile(
 ) {
   const jsInputFile = filename;
   let jsOutputFile = jsInputFile + outputSuffix;
-  const jsContents = fs.readFileSync(jsInputFile, { encoding: "UTF-8" });
+  const jsContents = fs.readFileSync(jsInputFile, { encoding: "utf-8" });
   if (!jsContents.includes("PolymerElement")) {
     return;
   }
   console.log("Processing " + jsInputFile);
 
   const tsOutput: MagicString = new MagicString(jsContents);
-  const polymerJs = acorn.parse(jsContents, { sourceType: "module" });
+  const polymerJs = acorn.parse(jsContents, { sourceType: "module", ecmaVersion: 2020 });
   const initValues: any[] = [];
   const computedProperties: any[] = [];
   const observedProperties: any[] = [];
@@ -869,7 +869,7 @@ function convertFile(
     qualifiedPrefixes: string[] = ["this"]
   ) {
     try {
-      const expr: any = (acorn.parse(expression) as any).body[0];
+      const expr: any = (acorn.parse(expression, { ecmaVersion: 2020 }) as any).body[0];
       // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
 
       return resolver(
@@ -976,8 +976,12 @@ function convertFile(
   );
   const prettified = prettier.format(output, {
     parser: "typescript",
+  }).then((formatted) => {
+    fs.writeFileSync(jsOutputFile, formatted);
+  }).catch((err) => {
+    console.error("Prettier formatting failed:", err);
+    fs.writeFileSync(jsOutputFile, output);
   });
-  fs.writeFileSync(jsOutputFile, prettified);
   function removeImport(node: any, ...identifiersOrFrom: string[]) {
     const remove: any[] = [];
     if (identifiersOrFrom.includes(node.source.value)) {

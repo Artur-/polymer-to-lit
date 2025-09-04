@@ -7,7 +7,7 @@ To test this tool, do the setup dance once
 ```
 cd frontend
 npm install
-node_modules/.bin/tsc convert.ts
+npx tsc convert.ts
 ```
 
 
