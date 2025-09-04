@@ -686,14 +686,22 @@ function convertFile(
         (el) => el.tagName === "TEMPLATE"
       )[0];
       const polymerItemsExpression = element.getAttribute("items");
-      replaceWithLitRepeat(element, polymerItemsExpression, resolver, template);
+      const filterExpression = element.getAttribute("filter");
+      const sortExpression = element.getAttribute("sort");
+      const asName = element.getAttribute("as") || "item";
+      const indexAsName = element.getAttribute("index-as") || "index";
+      replaceWithLitRepeat(element, polymerItemsExpression, resolver, template, filterExpression, sortExpression, asName, indexAsName);
       return;
     } else if (
       element.tagName === "TEMPLATE" &&
       element.getAttribute("is") === "dom-repeat"
     ) {
       const polymerItemsExpression = element.getAttribute("items");
-      replaceWithLitRepeat(element, polymerItemsExpression, resolver, element);
+      const filterExpression = element.getAttribute("filter");
+      const sortExpression = element.getAttribute("sort");
+      const asName = element.getAttribute("as") || "item";
+      const indexAsName = element.getAttribute("index-as") || "index";
+      replaceWithLitRepeat(element, polymerItemsExpression, resolver, element, filterExpression, sortExpression, asName, indexAsName);
       return;
     } else if (element.tagName === "VAADIN-GRID-COLUMN") {
       const templates = element.childNodes.filter(
@@ -1252,22 +1260,36 @@ function convertFile(
     element: any,
     polymerItemsExpression: string,
     outerResolver: Resolver,
-    template: any
+    template: any,
+    filterExpression?: string,
+    sortExpression?: string,
+    asName: string = "item",
+    indexAsName: string = "index"
   ) {
+    if (!polymerItemsExpression) {
+      warn("dom-repeat without items attribute");
+      return;
+    }
+    
+    // Extract the items expression from [[...]] or {{...}}
     const expression = polymerItemsExpression.substring(
       2,
       polymerItemsExpression.length - 2
     );
 
-    // debug("expression", expression);
+    debugLog(`Converting dom-repeat with expression: ${expression}`);
+    debugLog(`  as="${asName}", index-as="${indexAsName}"`);
+    if (filterExpression) debugLog(`  filter: ${filterExpression}`);
+    if (sortExpression) debugLog(`  sort: ${sortExpression}`);
+    
     const litExpression = resolveExpression(
       expression,
       true,
       outerResolver,
       "[]"
     );
-    // debug("litExpression", litExpression);
 
+    // Create resolver that knows about the custom item and index names
     const itemResolver = (
       originalExpression: string,
       node: any,
@@ -1276,20 +1298,59 @@ function convertFile(
       undefinedValue: string,
       qualifiedPrefixes
     ) => {
+      // Add the custom names to the list of valid prefixes
+      // This allows person.name to work properly
       return resolver(
         originalExpression,
         node,
         makeNullSafe,
         outerResolver,
         undefinedValue,
-        [...qualifiedPrefixes, "item", "index"]
+        [...qualifiedPrefixes, asName, indexAsName]
       );
     };
 
+    // Process template children with the item resolver
     template.childNodes.forEach((child) => rewriteElement(child, itemResolver));
 
-    const litRepeat = `\${(${litExpression}).map((item, index) => html\`${template.innerHTML}\`)}`;
-    element.replaceWith(litRepeat);
+    // Build the Lit expression
+    let litRepeat = litExpression;
+    
+    // Apply filter if present
+    if (filterExpression) {
+      // Remove [[...]] from filter expression
+      const filterExpr = filterExpression.substring(2, filterExpression.length - 2);
+      const resolvedFilter = resolveExpression(filterExpr, true, outerResolver);
+      
+      // The filter can be either:
+      // 1. A function reference: "_filterItems" -> needs to be called with item
+      // 2. A function that returns a filter: "_computeFilter(text)" -> already returns filter function
+      
+      // Note: In Polymer, if it's a function call, it returns the filter function
+      // so we just use it directly. If it's a function name, we need to call it.
+      litRepeat = `(${litRepeat}).filter(${resolvedFilter})`;
+      
+      verboseLog(`Applied filter: ${resolvedFilter}`);
+    }
+    
+    // Apply sort if present
+    if (sortExpression) {
+      // Remove [[...]] from sort expression
+      const sortExpr = sortExpression.substring(2, sortExpression.length - 2);
+      const resolvedSort = resolveExpression(sortExpr, true, outerResolver);
+      
+      // Check if we have a sort function or need to apply one
+      if (resolvedSort && resolvedSort !== "null") {
+        litRepeat = `(${litRepeat}).sort(${resolvedSort})`;
+        verboseLog(`Applied sort: ${resolvedSort}`);
+      }
+    }
+    
+    // Always use the custom variable names in the map function
+    const litRepeatFull = `\${(${litRepeat}).map((${asName}, ${indexAsName}) => html\`${template.innerHTML}\`)}`;
+    
+    verboseLog(`Converted dom-repeat to: ${litRepeatFull.substring(0, 60)}...`);
+    element.replaceWith(litRepeatFull);
   }
   function nullSafe(
     name: any,

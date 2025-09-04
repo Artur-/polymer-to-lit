@@ -25,15 +25,15 @@ class ComplexDomRepeat extends LitElement {
         <button @click="${this.sortByName}">Sort by Name</button>
         <button @click="${this.sortByAge}">Sort by Age</button>
         
-        ${((this.items) ? this.items : []).map((item, index) => html`
-          <div class="${'item '+(((this._computeItemClass) ? this._computeItemClass : '')((this.person && this.person.selected) ? this.person.selected : ''))}">
-            <span>${this.idx}. ${(this.person) ? this.person.name : undefined} (Age: ${(this.person) ? this.person.age : undefined})</span>
-            <button @click="${this.toggleSelection}" data-index="${this.idx}">
-              ${(this._computeButtonText)((this.person) ? this.person.selected : undefined)}
+        ${((((this.items) ? this.items : []).filter((this._computeFilter)(this.filterText))).sort(this.sortFunction)).map((person, idx) => html`
+          <div class="${'item '+(((this._computeItemClass) ? this._computeItemClass : '')((person.selected) ? person.selected : ''))}">
+            <span>${idx}. ${person.name} (Age: ${person.age})</span>
+            <button @click="${this.toggleSelection}" data-index="${idx}">
+              ${(this._computeButtonText)(person.selected)}
             </button>
             
-            ${((this.person && this.person.hobbies) ? this.person.hobbies : []).map((item, index) => html`
-              <span>• ${this.hobby}</span>
+            ${((person.hobbies) ? person.hobbies : []).map((hobby, index) => html`
+              <span>• ${hobby}</span>
             `)}
           </div>
         `)}
