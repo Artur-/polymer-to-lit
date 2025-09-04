@@ -24,12 +24,11 @@ class GridColumns extends LitElement {
         <vaadin-grid-column
           width="9em"
           ${columnHeaderRenderer(
-            (column) =>
-              html`
-                <vaadin-grid-sorter path="firstName"
-                  >First Name</vaadin-grid-sorter
-                >
-              `
+            (column) => html`
+              <vaadin-grid-sorter path="firstName"
+                >First Name</vaadin-grid-sorter
+              >
+            `,
           )}
           ${columnBodyRenderer((item) => html`${item.firstName}`)}
           ${columnFooterRenderer((column) => html`First Name`)}
@@ -39,12 +38,9 @@ class GridColumns extends LitElement {
         <vaadin-grid-column
           width="9em"
           ${columnHeaderRenderer(
-            (column) =>
-              html`
-                <vaadin-grid-sorter path="lastName"
-                  >Last Name</vaadin-grid-sorter
-                >
-              `
+            (column) => html`
+              <vaadin-grid-sorter path="lastName">Last Name</vaadin-grid-sorter>
+            `,
           )}
           ${columnBodyRenderer((item) => html`${item.lastName}`)}
           ${columnFooterRenderer((column) => html`Last Name`)}
@@ -55,17 +51,16 @@ class GridColumns extends LitElement {
           width="15em"
           flex-grow="2"
           ${columnHeaderRenderer(
-            (column) =>
-              html`
-                <vaadin-grid-sorter path="address.street"
-                  >Address</vaadin-grid-sorter
-                >
-              `
+            (column) => html`
+              <vaadin-grid-sorter path="address.street"
+                >Address</vaadin-grid-sorter
+              >
+            `,
           )}
           ${columnBodyRenderer(
             (item) =>
               html`${item.address ? item.address.street : undefined},
-              ${item.address ? item.address.city : undefined}`
+              ${item.address ? item.address.city : undefined}`,
           )}
           ${columnFooterRenderer((column) => html`Address`)}
         >

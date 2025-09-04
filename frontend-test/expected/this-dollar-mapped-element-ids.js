@@ -41,5 +41,5 @@ class ThisDollarMappedElement extends LitElement {
 
 window.customElements.define(
   ThisDollarMappedElement.is,
-  ThisDollarMappedElement
+  ThisDollarMappedElement,
 );

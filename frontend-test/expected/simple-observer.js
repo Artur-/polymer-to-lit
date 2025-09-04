@@ -43,7 +43,7 @@ class SimpleObserver extends LitElement {
       this.requestUpdateInternal(
         "first",
         oldValue,
-        this.constructor.properties.first
+        this.constructor.properties.first,
       );
     }
   }
@@ -59,7 +59,7 @@ class SimpleObserver extends LitElement {
       this.requestUpdateInternal(
         "last",
         oldValue,
-        this.constructor.properties.last
+        this.constructor.properties.last,
       );
     }
   }

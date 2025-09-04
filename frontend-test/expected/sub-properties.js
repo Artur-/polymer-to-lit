@@ -10,7 +10,7 @@ class SubProperties extends LitElement {
         Method:
         ${this.abc(
           this.prop && this.prop.sub ? this.prop.sub.something : undefined,
-          this.prop ? this.prop.value : undefined
+          this.prop ? this.prop.value : undefined,
         )}
       </div>
       <div

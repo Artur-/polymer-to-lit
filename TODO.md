@@ -41,10 +41,10 @@
 - [ ] Support multiple mixins composition
 - [ ] Handle custom mixin patterns
 
-### 7. Class Export Patterns
-- [ ] Support `export { ClassName }`
-- [ ] Handle `export default class`
-- [ ] Fix `export class` pattern handling
+### 7. Class Export Patterns ✅
+- [x] Support `export { ClassName }`
+- [x] Handle `export default class`
+- [x] Fix `export class` pattern handling
 
 ### 8. Property Conversion
 - [ ] Better handling of complex property configurations

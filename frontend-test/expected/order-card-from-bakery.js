@@ -205,7 +205,7 @@ class OrderCard extends LitElement {
                     <span class="count">${item.quantity}</span>
                     <div>${item.product ? item.product.name : undefined}</div>
                   </div>
-                `
+                `,
               )}
             </div>
           </div>

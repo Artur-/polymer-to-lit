@@ -11,14 +11,14 @@ class DomRepeatTest extends LitElement {
           <div><br /># ${index}</div>
           <div>Given name: <span>${item.given}</span></div>
           <div>Family name: <span>${item.family}</span></div>
-        `
+        `,
       )}
       ${(this.employees && this.employees.list ? this.employees.list : []).map(
         (item, index) => html`
           <div><br /># ${index}</div>
           <div>Given name: <span>${item.given}</span></div>
           <div>Family name: <span>${item.family}</span></div>
-        `
+        `,
       )}
     `;
   }

@@ -17,9 +17,9 @@ class DomRepeatTest extends LitElement {
               <div>
                 Employee name: <span>${item.given} ${item.family}</span>
               </div>
-            `
+            `,
           )}
-        `
+        `,
       )}
     `;
   }
