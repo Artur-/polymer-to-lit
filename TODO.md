@@ -94,24 +94,57 @@
 - [x] Provide migration guide
 - [x] Add troubleshooting section
 
+## Known Issues (From Test Cases)
+
+Based on the test suite, these areas need improvement:
+
+### Two-Way Binding Issues
+- [ ] `{{value::event}}` syntax not properly converted
+- [ ] Event part (::input, ::change, etc.) incorrectly kept in template literals
+- [ ] Custom event handlers for two-way binding need proper conversion
+
+### dom-repeat Issues  
+- [ ] Filter attribute not properly converted
+- [ ] Sort attribute not properly converted
+- [ ] Index-as and as attributes need special handling
+- [ ] Nested dom-repeat context issues
+
+### Array Mutation Methods
+- [ ] `push()`, `pop()`, `shift()`, `unshift()` need conversion
+- [ ] `splice()` method needs conversion
+- [ ] `set()` method for array items needs conversion
+- [ ] Array splice observers not supported
+
+### Complex Observers
+- [ ] Multiple property observers not fully supported
+- [ ] Deep path observers (e.g., `user.profile.*`) not converted
+- [ ] Wildcard observers need special handling
+
+### Other Issues
+- [ ] Computed properties with parameters not properly converted
+- [ ] Method calls in templates incorrectly converted
+- [ ] Context variables (person, item, index) in dom-repeat not scoped correctly
+
 ## Priority Order
 
 1. **Immediate** (Breaking Issues): ✅ COMPLETED
    - [x] Fix TypeScript compilation errors
    - [x] Fix runtime crash with jt-designer-view.js
    - [x] Add basic error handling
+   - [x] Fix export patterns
 
 2. **High** (Core Functionality):
-   - Improve mixin support
-   - Fix export patterns
-   - Better template processing
+   - Fix two-way binding conversion
+   - Improve dom-repeat handling
+   - Better property conversion
+   - Fix array mutation methods
 
 3. **Medium** (Robustness):
-   - Comprehensive error handling
-   - Input validation
+   - Complex observers support
+   - Deep path handling
    - Type safety improvements
 
 4. **Low** (Nice to Have):
    - Code organization
-   - Documentation
-   - Test coverage
+   - Source maps
+   - Performance optimizations
