@@ -12,12 +12,15 @@
     "declaration": false,
     "noImplicitAny": false,
     "noUnusedLocals": false,
-    "noUnusedParameters": false
+    "noUnusedParameters": false,
+    "typeRoots": [],
+    "types": []
   },
-  "include": [
+  "files": [
     "convert.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "**/*.d.ts"
   ]
 }
