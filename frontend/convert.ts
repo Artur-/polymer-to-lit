@@ -13,9 +13,26 @@ const assumeBooleanAttributes = ["hidden", "checked"];
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const inputArg = process.argv[2];
-if (!inputArg) {
-  console.error(`Usage: ${process.argv[1]} <file or directory to convert>`);
-  process.exit();
+if (!inputArg || process.argv.includes("-h") || process.argv.includes("--help")) {
+  console.log(`
+Polymer to Lit Converter
+
+Usage: ${process.argv[1]} <file or directory> [options]
+
+Options:
+  -1              Use Lit 1.x imports instead of Lit 2.x
+  -chain          Enable optional chaining (?.) in output
+  -out            Add .out.js suffix to output files (prevents overwriting)
+  -v, --verbose   Show detailed conversion information
+  -d, --debug     Show debug output (includes verbose)
+  -h, --help      Show this help message
+
+Examples:
+  node convert.js my-component.js -out
+  node convert.js ./src -v
+  node convert.js component.js -1 -chain --debug
+`);
+  process.exit(!inputArg ? 1 : 0);
 }
 
 let stat: fs.Stats;
@@ -38,8 +55,19 @@ let outputSuffix = "";
 if (process.argv.includes("-out")) {
   outputSuffix = ".out.js";
 }
+let verboseMode = false;
+if (process.argv.includes("-v") || process.argv.includes("--verbose")) {
+  verboseMode = true;
+  console.log("Verbose mode enabled");
+}
+let debugMode = false;
+if (process.argv.includes("-d") || process.argv.includes("--debug")) {
+  debugMode = true;
+  verboseMode = true; // Debug implies verbose
+  console.log("Debug mode enabled (includes verbose output)");
+}
 if (stat.isFile()) {
-  convertFile(inputArg, useLit1, useOptionalChaining, outputSuffix);
+  convertFile(inputArg, useLit1, useOptionalChaining, outputSuffix, verboseMode, debugMode);
 } else if (stat.isDirectory()) {
   const vaadinVersion = readVaadinVersion(inputArg);
   if (vaadinVersion && vaadinVersion.startsWith("14.")) {
@@ -55,7 +83,7 @@ if (stat.isFile()) {
     jsFiles
       .filter((jsFile) => !jsFile.includes("node_modules"))
       .forEach((file) =>
-        convertFile(file, useLit1, useOptionalChaining, outputSuffix)
+        convertFile(file, useLit1, useOptionalChaining, outputSuffix, verboseMode, debugMode)
       );
   } catch (e) {
     console.error("Error listing directory", e);
@@ -195,7 +223,9 @@ function convertFile(
   filename: string,
   useLit1: boolean,
   useOptionalChaining: boolean,
-  outputSuffix: string
+  outputSuffix: string,
+  verbose: boolean = false,
+  debug: boolean = false
 ) {
   // Validate input file
   if (!filename || typeof filename !== 'string') {
@@ -250,6 +280,13 @@ function convertFile(
   }
   
   console.log("Processing " + jsInputFile);
+  
+  if (verbose) {
+    console.log(`[INFO] File size: ${jsContents.length} bytes`);
+    console.log(`[INFO] Using Lit ${useLit1 ? '1.x' : '2.x'} imports`);
+    console.log(`[INFO] Optional chaining: ${useOptionalChaining ? 'enabled' : 'disabled'}`);
+    console.log(`[INFO] Output file: ${jsOutputFile}`);
+  }
 
   const tsOutput: MagicString = new MagicString(jsContents);
   let polymerJs: any;
@@ -274,10 +311,19 @@ function convertFile(
     console.error("ERROR", message, optionalParams);
   }
   function warn(message?: any, ...optionalParams: any[]) {
-    console.warn("WARNING", message, optionalParams);
+    if (verbose || debug) {
+      console.warn("WARNING", message, optionalParams);
+    }
   }
-  function debug(message?: any, ...optionalParams: any[]) {
-    console.log(message, optionalParams);
+  function debugLog(message?: any, ...optionalParams: any[]) {
+    if (debug) {
+      console.log("[DEBUG]", message, optionalParams.length > 0 ? optionalParams : "");
+    }
+  }
+  function verboseLog(message?: any, ...optionalParams: any[]) {
+    if (verbose || debug) {
+      console.log("[INFO]", message, optionalParams.length > 0 ? optionalParams : "");
+    }
   }
   const body = (polymerJs as any).body;
   const modifyClass = (node: any, resolve: Resolver) => {
@@ -286,6 +332,7 @@ function convertFile(
       warn("Class node missing id.name");
       return;
     }
+    verboseLog(`Processing class: ${className}`);
     const parentClass = node.superClass;
     let tag = "";
     let template = "";
@@ -312,6 +359,7 @@ function convertFile(
           return;
         }
         template = taggedTemplate.quasi.quasis[0].value.raw;
+        debugLog(`Template HTML length: ${template.length}`);
         const modifiedTemplate = modifyTemplate(template);
 
         const html = modifiedTemplate.htmls.join("\n");
@@ -357,7 +405,7 @@ function convertFile(
         classContent.key?.name == "is"
       ) {
         tag = classContent.value?.body?.body?.[0]?.argument?.value || '';
-        // debug(getSource(classContent));
+        verboseLog(`Custom element tag: ${tag}`);
       } else if (
         classContent.type == "MethodDefinition" &&
         classContent.key.name == "_attachDom"
@@ -399,7 +447,7 @@ function convertFile(
           const returnStatment = classContent.value.body.body;
 
           returnStatment[0].argument.properties.forEach((prop) => {
-            // debug(prop);
+            debugLog(`Property:`, prop.key?.name, prop.value?.type);
             const propName = prop.key.name;
 
             if (prop.value.type === "Identifier") {
@@ -807,7 +855,9 @@ function convertFile(
     "@polymer/polymer/polymer-element.js",
     "@polymer/polymer/lib/utils/html-tag.js",
   ];
+  verboseLog(`Processing ${body.length} top-level AST nodes`);
   for (const node of body) {
+    debugLog(`Processing node type: ${node.type}`);
     if (node.type === "ClassDeclaration") {
       modifyClass(node, baseResolver);
     } else if (node.type === "ImportDeclaration") {
@@ -834,9 +884,11 @@ function convertFile(
   const litImport = useLit1 ? "lit-element" : "lit";
   tsOutput.prepend(`import { html, LitElement, css } from "${litImport}";\n`);
   if (usesRepeat) {
+    verboseLog("Adding repeat directive import");
     tsOutput.prepend(`import { repeat } from "lit/directives/repeat.js";\n`);
   }
   if (usesUnsafeCss) {
+    verboseLog("Adding unsafeCSS import for style includes");
     tsOutput.prepend(`import { unsafeCSS } from "${litImport}";\n`);
   }
 
@@ -845,6 +897,7 @@ function convertFile(
   if (usesFooterRenderer) usedRenderers.push("columnFooterRenderer");
   if (usesHeaderRenderer) usedRenderers.push("columnHeaderRenderer");
   if (usedRenderers.length !== 0) {
+    verboseLog(`Adding Vaadin grid renderers: ${usedRenderers.join(", ")}`);
     tsOutput.prepend(
       `import { ${usedRenderers.join(", ")} } from "@vaadin/grid/lit.js";\n`
     );
@@ -965,7 +1018,9 @@ function convertFile(
         qualifiedPrefixes
       );
     } catch (e) {
-      console.error("Unable to parse expression: " + expression + " - " + e.message);
+      if (debug) {
+        console.error("Unable to parse expression: " + expression + " - " + e.message);
+      }
       // Return the expression as-is if we can't parse it
       return expression;
     }
@@ -1066,17 +1121,22 @@ function convertFile(
     /this\.\$\.([^;., ()]*)/g,
     `this.renderRoot.querySelector("#$1")`
   );
+  verboseLog("Formatting output with Prettier");
   prettier.format(output, {
     parser: "typescript",
   }).then((formatted) => {
     try {
       fs.writeFileSync(jsOutputFile, formatted);
       console.log(`Successfully converted ${jsInputFile} to ${jsOutputFile}`);
+      if (verbose) {
+        console.log(`[INFO] Output file size: ${formatted.length} bytes`);
+      }
     } catch (error) {
       console.error(`Error writing file ${jsOutputFile}: ${error.message}`);
     }
   }).catch((err) => {
     console.error("Prettier formatting failed:", err);
+    verboseLog("Writing unformatted output as fallback");
     try {
       fs.writeFileSync(jsOutputFile, output);
       console.log(`Converted ${jsInputFile} to ${jsOutputFile} (without formatting)`);
