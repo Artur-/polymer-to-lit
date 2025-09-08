@@ -8,7 +8,17 @@ import { sep as pathSeparator } from "path";
 import * as prettier from "prettier";
 const htmlParse = require("a-node-html-parser").parse;
 
-const assumeBooleanAttributes = ["hidden", "checked"];
+const assumeBooleanAttributes = ["hidden", "checked", "disabled", "required", "readonly", "selected"];
+
+// Properties that should be bound as properties (not attributes) in Lit
+// Most form elements have these as properties
+const knownProperties = [
+  "value", "checked", "selected", "selectedIndex",
+  "scrollTop", "scrollLeft", 
+  "textContent", "innerHTML",
+  // Common custom element properties (Vaadin, etc)
+  "items", "renderer", "opened", "theme", "label"
+];
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
@@ -812,11 +822,12 @@ function convertFile(
           (value.includes("{{") && value.includes("}}"))
         ) {
           // Expression can be either "[[foo]]"" or a combined expression like "{{helloText}} [[worldText]]"
+          debugLog(`Processing binding for ${key}="${value}"`);
 
           const expressions = splitExpression(value);
 
           if (key.endsWith("$")) {
-            // attribute binding prop$="[[foo]]" => prop=${this.foo}
+            // Polymer: $ suffix means attribute binding
             let attributeKey = key.substring(0, key.length - 1);
             if (attributeKey.endsWith("\\")) {
               attributeKey = attributeKey.substring(0, attributeKey.length - 1);
@@ -831,14 +842,38 @@ function convertFile(
             );
             element.removeAttribute(key);
           } else {
-            // property binding prop="[[foo]]" => .prop=${this.foo}
-            // prop="[[!and(property1, property2)]]" => .prop=${!this.and(this.property1, this.property2)}
-            // debug("Rewrite prop: ", key, value);
+            // No $ suffix: decide if it should be property or attribute binding
+            // In Polymer, no suffix means property binding
+            // But in Lit, we need to be selective about what gets property binding
+            
+            let bindingKey = key;
+            let bindingPrefix = "";
+            
+            if (assumeBooleanAttributes.includes(key)) {
+              // Boolean attributes use ? prefix
+              bindingPrefix = "?";
+            } else if (knownProperties.includes(key)) {
+              // Known properties use . prefix
+              bindingPrefix = ".";
+            } else {
+              // Everything else is treated as an attribute (no prefix)
+              // This includes: id, class, href, src, alt, title, style, data-*, aria-*, etc.
+              bindingPrefix = "";
+            }
+            
+            const resolvedExpression = resolveExpressions(expressions, true, resolver);
+            const newAttributeName = bindingPrefix + bindingKey;
+            debugLog(`Binding attribute ${key} as ${newAttributeName} with value: ${resolvedExpression}`);
+            
+            // Only remove the old attribute if it's different from the new one
+            if (newAttributeName !== key) {
+              element.removeAttribute(key);
+            }
+            
             element.setAttribute(
-              "." + key,
-              "${" + resolveExpressions(expressions, true, resolver) + "}"
+              newAttributeName,
+              "${" + resolvedExpression + "}"
             );
-            element.removeAttribute(key);
           }
 
           if (expressions.length === 1 && expressions[0].type === "twoway") {
@@ -943,6 +978,7 @@ function convertFile(
       }
     }
     htmls.push(root.innerHTML);
+    if (debug) console.log("Final HTML before returning:", root.innerHTML.substring(0, 500));
 
     const ret = { htmls, styles, styleIncludes };
     //debug(ret);
