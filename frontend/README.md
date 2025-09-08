@@ -19,12 +19,14 @@ A robust command-line tool for converting Polymer 3 components to Lit (LitElemen
 
 1. Clone the repository
 2. Install dependencies:
+
 ```bash
 cd frontend
 npm install
 ```
 
 3. Compile the TypeScript source:
+
 ```bash
 npx tsc
 ```
@@ -34,44 +36,50 @@ npx tsc
 ### Basic Usage
 
 Convert a single Polymer component:
+
 ```bash
 node convert.js my-component.js -out
 ```
 
 Convert all components in a directory:
+
 ```bash
 node convert.js ./src -out
 ```
 
 ### Options
 
-| Option | Description |
-|--------|-------------|
-| `-1` | Use Lit 1.x imports (`lit-element`) instead of Lit 2.x (`lit`) |
-| `-chain` | Enable optional chaining (`?.`) in output for null-safe property access |
-| `-out` | Add `.out.js` suffix to output files (prevents overwriting source files) |
-| `-v, --verbose` | Show detailed conversion information |
-| `-d, --debug` | Show debug output (includes verbose) |
-| `-h, --help` | Show help message |
+| Option          | Description                                                              |
+| --------------- | ------------------------------------------------------------------------ |
+| `-1`            | Use Lit 1.x imports (`lit-element`) instead of Lit 2.x (`lit`)           |
+| `-chain`        | Enable optional chaining (`?.`) in output for null-safe property access  |
+| `-out`          | Add `.out.js` suffix to output files (prevents overwriting source files) |
+| `-v, --verbose` | Show detailed conversion information                                     |
+| `-d, --debug`   | Show debug output (includes verbose)                                     |
+| `-h, --help`    | Show help message                                                        |
 
 ### Examples
 
 Convert with Lit 1.x compatibility:
+
 ```bash
 node convert.js my-component.js -1 -out
 ```
 
 Convert with optional chaining enabled:
+
 ```bash
 node convert.js my-component.js -chain -out
 ```
 
 Debug conversion issues:
+
 ```bash
 node convert.js problematic-component.js --debug -out
 ```
 
 Batch convert with verbose output:
+
 ```bash
 node convert.js ./src --verbose
 ```
@@ -79,6 +87,7 @@ node convert.js ./src --verbose
 ## What Gets Converted
 
 ### Class Declaration
+
 ```javascript
 // Polymer
 class MyElement extends PolymerElement { ... }
@@ -88,6 +97,7 @@ class MyElement extends LitElement { ... }
 ```
 
 ### Templates
+
 ```javascript
 // Polymer
 static get template() {
@@ -107,6 +117,7 @@ render() {
 ```
 
 ### Properties
+
 ```javascript
 // Polymer
 static get properties() {
@@ -132,6 +143,7 @@ static get properties() {
 ```
 
 ### Lifecycle Methods
+
 ```javascript
 // Polymer
 ready() {
@@ -147,19 +159,21 @@ firstUpdated(_changedProperties) {
 ```
 
 ### DOM Access
+
 ```javascript
 // Polymer
-this.$.elementId
-this.$['element-id']
+this.$.elementId;
+this.$["element-id"];
 
 // Lit
-this.renderRoot.querySelector("#elementId")
-this.renderRoot.querySelector("#element-id")
+this.renderRoot.querySelector("#elementId");
+this.renderRoot.querySelector("#element-id");
 ```
 
 ## Supported Polymer Features
 
 ### ✅ Fully Supported
+
 - Basic class conversion
 - Template literals and HTML templates
 - Property declarations
@@ -173,11 +187,13 @@ this.renderRoot.querySelector("#element-id")
 - `dom-if` and `dom-repeat` templates
 
 ### ⚠️ Partial Support
+
 - Complex observers (marked with TODO comments)
 - Custom mixins (basic support, may need manual review)
 - Vaadin Grid column renderers
 
 ### ❌ Not Supported (Requires Manual Conversion)
+
 - Polymer-specific behaviors
 - Legacy element syntax
 - Some complex template expressions
@@ -195,16 +211,19 @@ The converter includes comprehensive error handling:
 ## Debugging
 
 Use verbose mode to see conversion details:
+
 ```bash
 node convert.js my-component.js -v -out
 ```
 
 Use debug mode for comprehensive output:
+
 ```bash
 node convert.js my-component.js -d -out
 ```
 
 Debug output includes:
+
 - File sizes and processing steps
 - Property and method detection
 - Template transformation details
@@ -223,20 +242,25 @@ Debug output includes:
 ### Common Issues
 
 **Issue**: Conversion fails with parsing error
+
 - **Solution**: Check that the input file is valid JavaScript. Use debug mode to identify the problematic code.
 
 **Issue**: Template bindings not converted correctly
+
 - **Solution**: Complex expressions may need manual adjustment. Check for nested bindings or custom functions.
 
 **Issue**: Properties not initialized
+
 - **Solution**: Default values from Polymer properties are moved to the constructor. Verify initialization order.
 
 **Issue**: Styles not applied
+
 - **Solution**: Style modules require manual setup in Lit. Check that style includes are properly imported.
 
 ## Contributing
 
 Contributions are welcome! Please:
+
 1. Test your changes thoroughly
 2. Update documentation as needed
 3. Follow the existing code style
@@ -249,6 +273,7 @@ Contributions are welcome! Please:
 ## Support
 
 For issues, feature requests, or questions:
+
 - Create an issue in the repository
 - Check existing issues for solutions
 - Use debug mode to gather diagnostic information

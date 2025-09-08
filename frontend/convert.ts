@@ -8,22 +8,42 @@ import { sep as pathSeparator } from "path";
 import * as prettier from "prettier";
 const htmlParse = require("a-node-html-parser").parse;
 
-const assumeBooleanAttributes = ["hidden", "checked", "disabled", "required", "readonly", "selected"];
+const assumeBooleanAttributes = [
+  "hidden",
+  "checked",
+  "disabled",
+  "required",
+  "readonly",
+  "selected",
+];
 
 // Properties that should be bound as properties (not attributes) in Lit
 // Most form elements have these as properties
 const knownProperties = [
-  "value", "checked", "selected", "selectedIndex",
-  "scrollTop", "scrollLeft", 
-  "textContent", "innerHTML",
+  "value",
+  "checked",
+  "selected",
+  "selectedIndex",
+  "scrollTop",
+  "scrollLeft",
+  "textContent",
+  "innerHTML",
   // Common custom element properties (Vaadin, etc)
-  "items", "renderer", "opened", "theme", "label"
+  "items",
+  "renderer",
+  "opened",
+  "theme",
+  "label",
 ];
 
 // Comparison of Lit and Polymer in https://43081j.com/2018/08/future-of-polymer
 
 const inputArg = process.argv[2];
-if (!inputArg || process.argv.includes("-h") || process.argv.includes("--help")) {
+if (
+  !inputArg ||
+  process.argv.includes("-h") ||
+  process.argv.includes("--help")
+) {
   console.log(`
 Polymer to Lit Converter
 
@@ -77,7 +97,14 @@ if (process.argv.includes("-d") || process.argv.includes("--debug")) {
   console.log("Debug mode enabled (includes verbose output)");
 }
 if (stat.isFile()) {
-  convertFile(inputArg, useLit1, useOptionalChaining, outputSuffix, verboseMode, debugMode);
+  convertFile(
+    inputArg,
+    useLit1,
+    useOptionalChaining,
+    outputSuffix,
+    verboseMode,
+    debugMode,
+  );
 } else if (stat.isDirectory()) {
   const vaadinVersion = readVaadinVersion(inputArg);
   if (vaadinVersion && vaadinVersion.startsWith("14.")) {
@@ -93,7 +120,14 @@ if (stat.isFile()) {
     jsFiles
       .filter((jsFile) => !jsFile.includes("node_modules"))
       .forEach((file) =>
-        convertFile(file, useLit1, useOptionalChaining, outputSuffix, verboseMode, debugMode)
+        convertFile(
+          file,
+          useLit1,
+          useOptionalChaining,
+          outputSuffix,
+          verboseMode,
+          debugMode,
+        ),
       );
   } catch (e) {
     console.error("Error listing directory", e);
@@ -106,7 +140,7 @@ if (stat.isFile()) {
   } catch (e) {
     console.warn("");
     console.warn(
-      "Maven (mvn) was not found. Skipping conversion of potential Java files."
+      "Maven (mvn) was not found. Skipping conversion of potential Java files.",
     );
     console.warn("");
     process.exit();
@@ -117,7 +151,7 @@ if (stat.isFile()) {
   } catch (e) {
     console.warn("");
     console.warn(
-      "Java (java) was not found. Skipping conversion of potential Java files."
+      "Java (java) was not found. Skipping conversion of potential Java files.",
     );
     console.warn("");
 
@@ -132,7 +166,7 @@ if (stat.isFile()) {
   console.log("Downloading Java dependencies if needed...");
   try {
     run(
-      `mvn dependency:get -Dartifact=${groupId}:${artifactId}:${jarVersion} ${repo}`
+      `mvn dependency:get -Dartifact=${groupId}:${artifactId}:${jarVersion} ${repo}`,
     );
   } catch (e) {
     console.error(e);
@@ -146,8 +180,8 @@ if (stat.isFile()) {
     jarPath = run(
       `mvn help:evaluate -q -DforceStdout -Dexpression="settings.localRepository/${groupId.replace(
         /\./g,
-        pathSeparator
-      )}/${artifactId}/${jarVersion}/${artifactId}-${jarVersion}.jar"`
+        pathSeparator,
+      )}/${artifactId}/${jarVersion}/${artifactId}-${jarVersion}.jar"`,
     );
   } catch (e) {
     console.error(e);
@@ -220,7 +254,7 @@ function splitExpression(expression: string): BindingOrText[] {
         char(expression, i + 1) === "}"
       ) {
         // Check if the value contains ::event syntax
-        const colonIndex = current.value.indexOf('::');
+        const colonIndex = current.value.indexOf("::");
         if (colonIndex > -1) {
           // Split the property name and event
           const propertyName = current.value.substring(0, colonIndex);
@@ -245,28 +279,28 @@ function convertFile(
   useOptionalChaining: boolean,
   outputSuffix: string,
   verbose: boolean = false,
-  debug: boolean = false
+  debug: boolean = false,
 ) {
   // Validate input file
-  if (!filename || typeof filename !== 'string') {
-    console.error('Error: Invalid filename provided');
+  if (!filename || typeof filename !== "string") {
+    console.error("Error: Invalid filename provided");
     return;
   }
-  
-  if (!filename.endsWith('.js')) {
+
+  if (!filename.endsWith(".js")) {
     console.warn(`Warning: ${filename} is not a .js file, skipping`);
     return;
   }
-  
+
   const jsInputFile = filename;
   let jsOutputFile = jsInputFile + outputSuffix;
-  
+
   // Check if file exists and is readable
   if (!fs.existsSync(jsInputFile)) {
     console.error(`Error: File ${jsInputFile} does not exist`);
     return;
   }
-  
+
   let jsContents: string;
   try {
     const stats = fs.statSync(jsInputFile);
@@ -278,42 +312,54 @@ function convertFile(
       console.warn(`Warning: ${jsInputFile} is empty, skipping`);
       return;
     }
-    if (stats.size > 10 * 1024 * 1024) { // 10MB limit
-      console.warn(`Warning: ${jsInputFile} is very large (${Math.round(stats.size / 1024 / 1024)}MB), this may take a while`);
+    if (stats.size > 10 * 1024 * 1024) {
+      // 10MB limit
+      console.warn(
+        `Warning: ${jsInputFile} is very large (${Math.round(stats.size / 1024 / 1024)}MB), this may take a while`,
+      );
     }
-    
+
     jsContents = fs.readFileSync(jsInputFile, { encoding: "utf-8" });
   } catch (error) {
     console.error(`Error reading file ${jsInputFile}: ${error.message}`);
     return;
   }
-  
+
   // Check if it's a Polymer file
   if (!jsContents.includes("PolymerElement")) {
     return;
   }
-  
+
   // Validate output file path
   if (jsOutputFile === jsInputFile) {
-    console.error(`Error: Output file would overwrite input file. Use -out flag to specify a different output suffix.`);
+    console.error(
+      `Error: Output file would overwrite input file. Use -out flag to specify a different output suffix.`,
+    );
     return;
   }
-  
+
   console.log("Processing " + jsInputFile);
-  
+
   if (verbose) {
     console.log(`[INFO] File size: ${jsContents.length} bytes`);
-    console.log(`[INFO] Using Lit ${useLit1 ? '1.x' : '2.x'} imports`);
-    console.log(`[INFO] Optional chaining: ${useOptionalChaining ? 'enabled' : 'disabled'}`);
+    console.log(`[INFO] Using Lit ${useLit1 ? "1.x" : "2.x"} imports`);
+    console.log(
+      `[INFO] Optional chaining: ${useOptionalChaining ? "enabled" : "disabled"}`,
+    );
     console.log(`[INFO] Output file: ${jsOutputFile}`);
   }
 
   const tsOutput: MagicString = new MagicString(jsContents);
   let polymerJs: any;
   try {
-    polymerJs = acorn.parse(jsContents, { sourceType: "module", ecmaVersion: 2020 });
+    polymerJs = acorn.parse(jsContents, {
+      sourceType: "module",
+      ecmaVersion: 2020,
+    });
   } catch (error) {
-    console.error(`Error parsing JavaScript in ${jsInputFile}: ${error.message}`);
+    console.error(
+      `Error parsing JavaScript in ${jsInputFile}: ${error.message}`,
+    );
     return;
   }
   // Global flags for imports
@@ -333,12 +379,20 @@ function convertFile(
   }
   function debugLog(message?: any, ...optionalParams: any[]) {
     if (debug) {
-      console.log("[DEBUG]", message, optionalParams.length > 0 ? optionalParams : "");
+      console.log(
+        "[DEBUG]",
+        message,
+        optionalParams.length > 0 ? optionalParams : "",
+      );
     }
   }
   function verboseLog(message?: any, ...optionalParams: any[]) {
     if (verbose || debug) {
-      console.log("[INFO]", message, optionalParams.length > 0 ? optionalParams : "");
+      console.log(
+        "[INFO]",
+        message,
+        optionalParams.length > 0 ? optionalParams : "",
+      );
     }
   }
   const body = (polymerJs as any).body;
@@ -352,7 +406,7 @@ function convertFile(
     const parentClass = node.superClass;
     let tag = "";
     let template = "";
-    
+
     // Per-class variables
     const initValues: any[] = [];
     const computedProperties: any[] = [];
@@ -401,8 +455,8 @@ function convertFile(
             "dom-module[id='${include}']"
             ).firstElementChild.content.firstElementChild.innerText`,
                 ["document"],
-                '""'
-              )};`
+                '""',
+              )};`,
           )
           .join("\n")}
         return [
@@ -419,13 +473,13 @@ function convertFile(
         tsOutput.overwrite(
           classContent.start,
           classContent.end,
-          (hasStyles ? stylesGetter : "") + renderMethod
+          (hasStyles ? stylesGetter : "") + renderMethod,
         );
       } else if (
         classContent.type == "MethodDefinition" &&
         classContent.key?.name == "is"
       ) {
-        tag = classContent.value?.body?.body?.[0]?.argument?.value || '';
+        tag = classContent.value?.body?.body?.[0]?.argument?.value || "";
         verboseLog(`Custom element tag: ${tag}`);
       } else if (
         classContent.type == "MethodDefinition" &&
@@ -439,7 +493,7 @@ function convertFile(
           // Do not use a shadow root
           return this;
         }
-        `
+        `,
         );
       } else if (
         classContent.type == "MethodDefinition" &&
@@ -454,7 +508,7 @@ function convertFile(
           classContent.end,
           src
             .replace("ready()", "firstUpdated(_changedProperties)")
-            .replace("super.ready()", "super.firstUpdated(_changedProperties)")
+            .replace("super.ready()", "super.firstUpdated(_changedProperties)"),
         );
       } else if (
         classContent.type === "MethodDefinition" &&
@@ -493,7 +547,7 @@ function convertFile(
                         valueNode?.body?.body[0]?.type === "ReturnStatement"
                       ) {
                         const arrayExpression = getSource(
-                          valueNode.body.body[0].argument
+                          valueNode.body.body[0].argument,
                         );
                         initValues.push({
                           name: propName,
@@ -510,7 +564,7 @@ function convertFile(
                         "UNKNOWN type of 'value' for property",
                         propName,
                         ":",
-                        valueNode.type
+                        valueNode.type,
                       );
                     }
                     removeIncludingTrailingComma(typeValue);
@@ -526,7 +580,7 @@ function convertFile(
                       // Complex observer
                       tsOutput.prependLeft(
                         valueNode.start,
-                        "/* TODO: Convert this complex observer manually */\n"
+                        "/* TODO: Convert this complex observer manually */\n",
                       );
                     } else {
                       observedProperties.push({
@@ -583,7 +637,7 @@ function convertFile(
       // myProperty = false;
       // debug(getSource(classContent));
     }
-    
+
     // Process property initializations, computed properties, and observers
     const valueInitCode = initValues
       .map((initValue) => {
@@ -617,7 +671,7 @@ function convertFile(
     `;
       })
       .join("\n");
-      
+
     if (valueInitCode.length != 0) {
       if (valueInitPosition !== -1) {
         tsOutput.prependRight(valueInitPosition, valueInitCode);
@@ -637,16 +691,23 @@ function convertFile(
     if (computedPropertiesCode.length != 0) {
       tsOutput.prependRight(newMethodInjectPosition, computedPropertiesCode);
     }
-    
+
     return { className, parentClass, template, tag };
   };
 
   const removeIncludingTrailingComma = (node) => {
-    if (!node || typeof node.start !== 'number' || typeof node.end !== 'number') {
+    if (
+      !node ||
+      typeof node.start !== "number" ||
+      typeof node.end !== "number"
+    ) {
       warn("Invalid node provided to removeIncludingTrailingComma");
       return;
     }
-    if (node.end < jsContents.length && jsContents.substring(node.end, node.end + 1) === ",") {
+    if (
+      node.end < jsContents.length &&
+      jsContents.substring(node.end, node.end + 1) === ","
+    ) {
       tsOutput.remove(node.start, node.end + 1);
     } else {
       tsOutput.remove(node.start, node.end);
@@ -683,7 +744,7 @@ function convertFile(
     makeNullSafe: boolean,
     resolver: Resolver,
     undefinedValue: string,
-    qualifiedPrefixes: string[]
+    qualifiedPrefixes: string[],
   ) => string;
 
   const rewriteElement = (element: any, resolver: Resolver) => {
@@ -696,21 +757,30 @@ function convertFile(
       return;
     } else if (element.tagName === "DOM-IF") {
       const template = element.childNodes.filter(
-        (el) => el.tagName === "TEMPLATE"
+        (el) => el.tagName === "TEMPLATE",
       )[0];
       const polymerExpression = element.getAttribute("if");
       replaceWithLitIf(element, polymerExpression, resolver, template);
       return;
     } else if (element.tagName === "DOM-REPEAT") {
       const template = element.childNodes.filter(
-        (el) => el.tagName === "TEMPLATE"
+        (el) => el.tagName === "TEMPLATE",
       )[0];
       const polymerItemsExpression = element.getAttribute("items");
       const filterExpression = element.getAttribute("filter");
       const sortExpression = element.getAttribute("sort");
       const asName = element.getAttribute("as") || "item";
       const indexAsName = element.getAttribute("index-as") || "index";
-      replaceWithLitRepeat(element, polymerItemsExpression, resolver, template, filterExpression, sortExpression, asName, indexAsName);
+      replaceWithLitRepeat(
+        element,
+        polymerItemsExpression,
+        resolver,
+        template,
+        filterExpression,
+        sortExpression,
+        asName,
+        indexAsName,
+      );
       return;
     } else if (
       element.tagName === "TEMPLATE" &&
@@ -721,26 +791,35 @@ function convertFile(
       const sortExpression = element.getAttribute("sort");
       const asName = element.getAttribute("as") || "item";
       const indexAsName = element.getAttribute("index-as") || "index";
-      replaceWithLitRepeat(element, polymerItemsExpression, resolver, element, filterExpression, sortExpression, asName, indexAsName);
+      replaceWithLitRepeat(
+        element,
+        polymerItemsExpression,
+        resolver,
+        element,
+        filterExpression,
+        sortExpression,
+        asName,
+        indexAsName,
+      );
       return;
     } else if (element.tagName === "VAADIN-GRID-COLUMN") {
       const templates = element.childNodes.filter(
-        (child) => child.tagName === "TEMPLATE"
+        (child) => child.tagName === "TEMPLATE",
       );
       const headerTemplate = templates.find(
-        (template) => template.getAttribute("class") === "header"
+        (template) => template.getAttribute("class") === "header",
       );
       const bodyTemplate = templates.find(
-        (template) => !template.hasAttribute("class")
+        (template) => !template.hasAttribute("class"),
       );
       const footerTemplate = templates.find(
-        (template) => template.getAttribute("class") === "footer"
+        (template) => template.getAttribute("class") === "footer",
       );
 
       if (headerTemplate) {
         usesHeaderRenderer = true;
         headerTemplate.childNodes.forEach((child) =>
-          rewriteHtmlNode(child, resolver)
+          rewriteHtmlNode(child, resolver),
         );
 
         element.setAttribute(
@@ -749,7 +828,7 @@ function convertFile(
           html\`${headerTemplate.innerHTML}\`
       )}
       `,
-          ""
+          "",
         );
         headerTemplate.remove();
       }
@@ -760,7 +839,7 @@ function convertFile(
           expr,
           makeNullSafe,
           resolver,
-          undefinedValue
+          undefinedValue,
         ) => {
           if (originalExpression.startsWith("item.")) {
             return makeNullSafe
@@ -774,11 +853,11 @@ function convertFile(
             true,
             itemResolver,
             undefinedValue,
-            ["this"]
+            ["this"],
           );
         };
         bodyTemplate.childNodes.forEach((child) =>
-          rewriteHtmlNode(child, itemResolver)
+          rewriteHtmlNode(child, itemResolver),
         );
 
         element.setAttribute(
@@ -787,14 +866,14 @@ function convertFile(
           html\`${bodyTemplate.innerHTML}\`
       )}
       `,
-          ""
+          "",
         );
         bodyTemplate.remove();
       }
       if (footerTemplate) {
         usesFooterRenderer = true;
         footerTemplate.childNodes.forEach((child) =>
-          rewriteHtmlNode(child, resolver)
+          rewriteHtmlNode(child, resolver),
         );
 
         element.setAttribute(
@@ -803,7 +882,7 @@ function convertFile(
           html\`${footerTemplate.innerHTML}\`
       )}
       `,
-          ""
+          "",
         );
         footerTemplate.remove();
       }
@@ -838,17 +917,17 @@ function convertFile(
             }
             element.setAttribute(
               attributeKey,
-              "${" + resolveExpressions(expressions, true, resolver) + "}"
+              "${" + resolveExpressions(expressions, true, resolver) + "}",
             );
             element.removeAttribute(key);
           } else {
             // No $ suffix: decide if it should be property or attribute binding
             // In Polymer, no suffix means property binding
             // But in Lit, we need to be selective about what gets property binding
-            
+
             let bindingKey = key;
             let bindingPrefix = "";
-            
+
             if (assumeBooleanAttributes.includes(key)) {
               // Boolean attributes use ? prefix
               bindingPrefix = "?";
@@ -860,19 +939,25 @@ function convertFile(
               // This includes: id, class, href, src, alt, title, style, data-*, aria-*, etc.
               bindingPrefix = "";
             }
-            
-            const resolvedExpression = resolveExpressions(expressions, true, resolver);
+
+            const resolvedExpression = resolveExpressions(
+              expressions,
+              true,
+              resolver,
+            );
             const newAttributeName = bindingPrefix + bindingKey;
-            debugLog(`Binding attribute ${key} as ${newAttributeName} with value: ${resolvedExpression}`);
-            
+            debugLog(
+              `Binding attribute ${key} as ${newAttributeName} with value: ${resolvedExpression}`,
+            );
+
             // Only remove the old attribute if it's different from the new one
             if (newAttributeName !== key) {
               element.removeAttribute(key);
             }
-            
+
             element.setAttribute(
               newAttributeName,
-              "${" + resolvedExpression + "}"
+              "${" + resolvedExpression + "}",
             );
           }
 
@@ -880,16 +965,17 @@ function convertFile(
             // For two-way binding, add an event listener
             const expr = expressions[0];
             const customEvent = expr.event;
-            
+
             // Determine the event to listen to
             let eventName: string;
             let valueGetter: string;
-            
+
             if (customEvent) {
               // Custom event specified with :: syntax (e.g., {{value::input}})
               eventName = customEvent;
               // For custom events specified with ::, use e.target.value by default
-              valueGetter = key === "checked" ? "e.target.checked" : "e.target.value";
+              valueGetter =
+                key === "checked" ? "e.target.checked" : "e.target.value";
             } else {
               // Standard Polymer two-way binding always uses property-changed events
               // e.g., {{value}} listens for value-changed, {{name}} listens for name-changed
@@ -905,12 +991,12 @@ function convertFile(
                 valueGetter = `e.target.${key}`;
               }
             }
-            
+
             const attributeKey = "@" + eventName;
             const attributeValue = `\${(e) => (${resolveExpressions(
               expressions,
               false,
-              resolver
+              resolver,
             )} = ${valueGetter})}`;
             element.setAttribute(attributeKey, attributeValue);
           }
@@ -925,11 +1011,11 @@ function convertFile(
   };
   const modifyTemplate = (inputHtml) => {
     // Validate HTML input
-    if (!inputHtml || typeof inputHtml !== 'string') {
+    if (!inputHtml || typeof inputHtml !== "string") {
       warn("Invalid or empty HTML template");
       return { htmls: [], styles: [], styleIncludes: [] };
     }
-    
+
     //  if (inputHtml.includes("}}")) {
     //   throw "Template contains two way bindings which are not supported";
     // }
@@ -978,7 +1064,11 @@ function convertFile(
       }
     }
     htmls.push(root.innerHTML);
-    if (debug) console.log("Final HTML before returning:", root.innerHTML.substring(0, 500));
+    if (debug)
+      console.log(
+        "Final HTML before returning:",
+        root.innerHTML.substring(0, 500),
+      );
 
     const ret = { htmls, styles, styleIncludes };
     //debug(ret);
@@ -1009,18 +1099,29 @@ function convertFile(
         modifyClass(node.declaration, baseResolver);
       } else if (node.specifiers && node.specifiers.length > 0) {
         // export { ClassName } or export { ClassName as Something }
-        verboseLog(`Processing named export with ${node.specifiers.length} specifiers`);
+        verboseLog(
+          `Processing named export with ${node.specifiers.length} specifiers`,
+        );
         // These exports are fine to keep as-is for Lit components
         // No modification needed, just log for debugging
         node.specifiers.forEach((spec: any) => {
-          debugLog(`Export specifier: ${spec.local?.name || 'unknown'} ${spec.exported ? `as ${spec.exported.name}` : ''}`);
+          debugLog(
+            `Export specifier: ${spec.local?.name || "unknown"} ${spec.exported ? `as ${spec.exported.name}` : ""}`,
+          );
         });
       } else if (node.declaration) {
         // Other export declarations (variables, functions, etc.)
-        warn("Unhandled export declaration type", node.declaration.type, getSource(node));
+        warn(
+          "Unhandled export declaration type",
+          node.declaration.type,
+          getSource(node),
+        );
       } else {
         // Export without declaration or specifiers (shouldn't normally happen)
-        warn("Export declaration without declaration or specifiers", getSource(node));
+        warn(
+          "Export declaration without declaration or specifiers",
+          getSource(node),
+        );
       }
     } else if (node.type === "ExportDefaultDeclaration") {
       // Handle export default patterns
@@ -1030,10 +1131,16 @@ function convertFile(
         modifyClass(node.declaration, baseResolver);
       } else if (node.declaration.type === "Identifier") {
         // export default ClassName
-        verboseLog(`Processing export default identifier: ${node.declaration.name}`);
+        verboseLog(
+          `Processing export default identifier: ${node.declaration.name}`,
+        );
         // This is fine for Lit components, no modification needed
       } else {
-        warn("Unhandled export default type", node.declaration.type, getSource(node));
+        warn(
+          "Unhandled export default type",
+          node.declaration.type,
+          getSource(node),
+        );
       }
     } else if (
       !getSource(node).includes("customElements.define") &&
@@ -1061,7 +1168,7 @@ function convertFile(
   if (usedRenderers.length !== 0) {
     verboseLog(`Adding Vaadin grid renderers: ${usedRenderers.join(", ")}`);
     tsOutput.prepend(
-      `import { ${usedRenderers.join(", ")} } from "@vaadin/grid/lit.js";\n`
+      `import { ${usedRenderers.join(", ")} } from "@vaadin/grid/lit.js";\n`,
     );
   }
 
@@ -1070,7 +1177,7 @@ function convertFile(
     makeNullSafe: boolean,
     resolver: Resolver,
     undefinedValue: string = "undefined",
-    qualifiedPrefixes: string[] = ["this"]
+    qualifiedPrefixes: string[] = ["this"],
   ) {
     // result is used inside ${ }
     // abc -> "abc"
@@ -1083,7 +1190,7 @@ function convertFile(
         makeNullSafe,
         resolver,
         undefinedValue,
-        qualifiedPrefixes
+        qualifiedPrefixes,
       );
     }
 
@@ -1098,7 +1205,7 @@ function convertFile(
             makeNullSafe,
             resolver,
             "''", // Use "" so concatenation does not write 'undefined'. Maybe it should be used for other bindings also...
-            qualifiedPrefixes
+            qualifiedPrefixes,
           ) +
           ")"
         );
@@ -1113,7 +1220,7 @@ function convertFile(
     makeNullSafe: boolean,
     resolver: Resolver,
     undefinedValue: string = "undefined",
-    qualifiedPrefixes: string[] = ["this"]
+    qualifiedPrefixes: string[] = ["this"],
   ) {
     // Handle Polymer wildcard syntax for array/object observers
     // Replace all occurrences of .* and .splices in the expression
@@ -1121,11 +1228,13 @@ function convertFile(
     // e.g., "items.*" becomes "items"
     // e.g., "items.splices" becomes "items"
     const cleanedExpression = expression
-      .replace(/(\w+)\.\*/g, '$1')  // Replace word.* with word
-      .replace(/(\w+)\.splices/g, '$1'); // Replace word.splices with word
-    
+      .replace(/(\w+)\.\*/g, "$1") // Replace word.* with word
+      .replace(/(\w+)\.splices/g, "$1"); // Replace word.splices with word
+
     try {
-      const expr: any = (acorn.parse(cleanedExpression, { ecmaVersion: 2020 }) as any).body[0];
+      const expr: any = (
+        acorn.parse(cleanedExpression, { ecmaVersion: 2020 }) as any
+      ).body[0];
       // debug("resolveExpression", expression); //, inspect(expr, { depth: null }));
 
       return resolver(
@@ -1134,11 +1243,16 @@ function convertFile(
         makeNullSafe,
         resolver,
         undefinedValue,
-        qualifiedPrefixes
+        qualifiedPrefixes,
       );
     } catch (e) {
       if (debug) {
-        console.error("Unable to parse expression: " + cleanedExpression + " - " + e.message);
+        console.error(
+          "Unable to parse expression: " +
+            cleanedExpression +
+            " - " +
+            e.message,
+        );
       }
       // Return the cleaned expression as-is if we can't parse it
       return cleanedExpression;
@@ -1150,7 +1264,7 @@ function convertFile(
     makeNullSafe: boolean,
     resolve: Resolver,
     undefinedValue: string,
-    qualifiedPrefixes: string[]
+    qualifiedPrefixes: string[],
   ) {
     // debug("thisResolver", expr.type);
     if (expr.type === "ExpressionStatement") {
@@ -1160,12 +1274,12 @@ function convertFile(
         makeNullSafe,
         resolve,
         undefinedValue,
-        qualifiedPrefixes
+        qualifiedPrefixes,
       );
     } else if (expr.type === "MemberExpression") {
       const result = prependThisIfNeeded(
         qualifiedPrefixes,
-        originalExpression.substring(expr.start, expr.end)
+        originalExpression.substring(expr.start, expr.end),
       );
 
       return makeNullSafe
@@ -1188,7 +1302,7 @@ function convertFile(
           makeNullSafe,
           resolve,
           undefinedValue,
-          qualifiedPrefixes
+          qualifiedPrefixes,
         ) +
         ")"
       );
@@ -1203,8 +1317,8 @@ function convertFile(
               makeNullSafe,
               resolve,
               undefinedValue,
-              qualifiedPrefixes
-            )
+              qualifiedPrefixes,
+            ),
           )
           .join(", ");
       } catch (error) {
@@ -1217,7 +1331,7 @@ function convertFile(
         makeNullSafe,
         resolve,
         undefinedValue,
-        qualifiedPrefixes
+        qualifiedPrefixes,
       );
       const retval = "(" + caller + ")(" + args + ")";
       // debug("Caller", caller);
@@ -1234,35 +1348,40 @@ function convertFile(
   // this.$['ordersGrid'] -> this.renderRoot.querySelector("#ordersGrid")
   output = output.replace(
     /this.\$\[['"]([^;., ()]*['"]\])/g,
-    `this.renderRoot.querySelector("#$1")`
+    `this.renderRoot.querySelector("#$1")`,
   );
   output = output.replace(
     /this\.\$\.([^;., ()]*)/g,
-    `this.renderRoot.querySelector("#$1")`
+    `this.renderRoot.querySelector("#$1")`,
   );
   verboseLog("Formatting output with Prettier");
-  prettier.format(output, {
-    parser: "typescript",
-  }).then((formatted) => {
-    try {
-      fs.writeFileSync(jsOutputFile, formatted);
-      console.log(`Successfully converted ${jsInputFile} to ${jsOutputFile}`);
-      if (verbose) {
-        console.log(`[INFO] Output file size: ${formatted.length} bytes`);
+  prettier
+    .format(output, {
+      parser: "typescript",
+    })
+    .then((formatted) => {
+      try {
+        fs.writeFileSync(jsOutputFile, formatted);
+        console.log(`Successfully converted ${jsInputFile} to ${jsOutputFile}`);
+        if (verbose) {
+          console.log(`[INFO] Output file size: ${formatted.length} bytes`);
+        }
+      } catch (error) {
+        console.error(`Error writing file ${jsOutputFile}: ${error.message}`);
       }
-    } catch (error) {
-      console.error(`Error writing file ${jsOutputFile}: ${error.message}`);
-    }
-  }).catch((err) => {
-    console.error("Prettier formatting failed:", err);
-    verboseLog("Writing unformatted output as fallback");
-    try {
-      fs.writeFileSync(jsOutputFile, output);
-      console.log(`Converted ${jsInputFile} to ${jsOutputFile} (without formatting)`);
-    } catch (error) {
-      console.error(`Error writing file ${jsOutputFile}: ${error.message}`);
-    }
-  });
+    })
+    .catch((err) => {
+      console.error("Prettier formatting failed:", err);
+      verboseLog("Writing unformatted output as fallback");
+      try {
+        fs.writeFileSync(jsOutputFile, output);
+        console.log(
+          `Converted ${jsInputFile} to ${jsOutputFile} (without formatting)`,
+        );
+      } catch (error) {
+        console.error(`Error writing file ${jsOutputFile}: ${error.message}`);
+      }
+    });
   function removeImport(node: any, ...identifiersOrFrom: string[]) {
     const remove: any[] = [];
     if (identifiersOrFrom.includes(node.source.value)) {
@@ -1299,41 +1418,41 @@ function convertFile(
     element: any,
     polymerExpression: string,
     resolver: Resolver,
-    template: any
+    template: any,
   ) {
     if (!polymerExpression) {
       warn("dom-if without if attribute");
       return;
     }
-    
+
     // Extract the expression from [[...]] or {{...}}
     const expression = polymerExpression.substring(
       2,
-      polymerExpression.length - 2
+      polymerExpression.length - 2,
     );
 
     debugLog(`Converting dom-if with expression: ${expression}`);
-    
+
     // Resolve the condition expression
     const litExpression = resolveExpression(expression, true, resolver);
-    
+
     // Process child nodes first
     template.childNodes.forEach((child) => rewriteElement(child, resolver));
-    
+
     // Get the inner content and handle whitespace properly
     const innerContent = template.innerHTML;
-    
+
     // Check if the inner content is empty or just whitespace
     if (!innerContent || !innerContent.trim()) {
       debugLog("Empty dom-if template, replacing with empty string");
-      element.replaceWith('');
+      element.replaceWith("");
       return;
     }
-    
+
     // Create the conditional rendering
     // Use proper spacing to maintain readability
     const litIf = `\${${litExpression} ? html\`${innerContent}\` : html\`\`}`;
-    
+
     verboseLog(`Converted dom-if to: ${litIf.substring(0, 50)}...`);
     element.replaceWith(litIf);
   }
@@ -1346,29 +1465,29 @@ function convertFile(
     filterExpression?: string,
     sortExpression?: string,
     asName: string = "item",
-    indexAsName: string = "index"
+    indexAsName: string = "index",
   ) {
     if (!polymerItemsExpression) {
       warn("dom-repeat without items attribute");
       return;
     }
-    
+
     // Extract the items expression from [[...]] or {{...}}
     const expression = polymerItemsExpression.substring(
       2,
-      polymerItemsExpression.length - 2
+      polymerItemsExpression.length - 2,
     );
 
     debugLog(`Converting dom-repeat with expression: ${expression}`);
     debugLog(`  as="${asName}", index-as="${indexAsName}"`);
     if (filterExpression) debugLog(`  filter: ${filterExpression}`);
     if (sortExpression) debugLog(`  sort: ${sortExpression}`);
-    
+
     const litExpression = resolveExpression(
       expression,
       true,
       outerResolver,
-      "[]"
+      "[]",
     );
 
     // Create resolver that knows about the custom item and index names
@@ -1378,7 +1497,7 @@ function convertFile(
       makeNullSafe: boolean,
       resolver: Resolver,
       undefinedValue: string,
-      qualifiedPrefixes
+      qualifiedPrefixes,
     ) => {
       // Add the custom names to the list of valid prefixes
       // This allows person.name to work properly
@@ -1388,7 +1507,7 @@ function convertFile(
         makeNullSafe,
         outerResolver,
         undefinedValue,
-        [...qualifiedPrefixes, asName, indexAsName]
+        [...qualifiedPrefixes, asName, indexAsName],
       );
     };
 
@@ -1397,50 +1516,53 @@ function convertFile(
 
     // Build the Lit expression
     let litRepeat = litExpression;
-    
+
     // Apply filter if present
     if (filterExpression) {
       // Remove [[...]] from filter expression
-      const filterExpr = filterExpression.substring(2, filterExpression.length - 2);
+      const filterExpr = filterExpression.substring(
+        2,
+        filterExpression.length - 2,
+      );
       const resolvedFilter = resolveExpression(filterExpr, true, outerResolver);
-      
+
       // The filter can be either:
       // 1. A function reference: "_filterItems" -> needs to be called with item
       // 2. A function that returns a filter: "_computeFilter(text)" -> already returns filter function
-      
+
       // Note: In Polymer, if it's a function call, it returns the filter function
       // so we just use it directly. If it's a function name, we need to call it.
       litRepeat = `(${litRepeat}).filter(${resolvedFilter})`;
-      
+
       verboseLog(`Applied filter: ${resolvedFilter}`);
     }
-    
+
     // Apply sort if present
     if (sortExpression) {
       // Remove [[...]] from sort expression
       const sortExpr = sortExpression.substring(2, sortExpression.length - 2);
       const resolvedSort = resolveExpression(sortExpr, true, outerResolver);
-      
+
       // Check if we have a sort function or need to apply one
       if (resolvedSort && resolvedSort !== "null") {
         litRepeat = `(${litRepeat}).sort(${resolvedSort})`;
         verboseLog(`Applied sort: ${resolvedSort}`);
       }
     }
-    
+
     // Always use the custom variable names in the map function
     const litRepeatFull = `\${(${litRepeat}).map((${asName}, ${indexAsName}) => html\`${template.innerHTML}\`)}`;
-    
+
     verboseLog(`Converted dom-repeat to: ${litRepeatFull.substring(0, 60)}...`);
     element.replaceWith(litRepeatFull);
   }
   function nullSafe(
     name: any,
     assumedNonNull: string[],
-    undefinedValue: string
+    undefinedValue: string,
   ) {
     // Validate inputs
-    if (!name || typeof name !== 'string') {
+    if (!name || typeof name !== "string") {
       return undefinedValue;
     }
     if (!Array.isArray(assumedNonNull)) {
@@ -1502,8 +1624,8 @@ function convertFile(
   }
   function prependThisIfNeeded(qualifiedPrefixes: string[], variable: string) {
     // Validate inputs
-    if (!variable || typeof variable !== 'string') {
-      return "this." + (variable || '');
+    if (!variable || typeof variable !== "string") {
+      return "this." + (variable || "");
     }
     if (!Array.isArray(qualifiedPrefixes)) {
       qualifiedPrefixes = ["this"];

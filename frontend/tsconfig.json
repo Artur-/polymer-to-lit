@@ -16,11 +16,6 @@
     "typeRoots": [],
     "types": []
   },
-  "files": [
-    "convert.ts"
-  ],
-  "exclude": [
-    "node_modules",
-    "**/*.d.ts"
-  ]
+  "files": ["convert.ts"],
+  "exclude": ["node_modules", "**/*.d.ts"]
 }
